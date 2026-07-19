@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+============================================================
+Owner: Faraz (Frontend) | Phase 3 - Day 9-11
+============================================================
+Per the spec: "the main tweet is at the top, and below it, a feed of tweets
+whose parent_tweet_id matches this tweet" - no tree structure, just a flat
+list of replies.
+-->
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox spacing="10.0" xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.twitterclone.client.controller.TweetDetailController">
+    <padding>
+        <Insets top="15" right="20" bottom="15" left="20"/>
+    </padding>
+
+    <Button fx:id="backButton" text="&lt; Back" onAction="#onBackButtonClick"/>
+
+    <!-- TODO(Faraz - Phase 3): fx:id="mainTweetContainer" - this is where the
+         main tweet's card (built from the same TweetCard.fxml) gets added
+         programmatically -->
+    <VBox fx:id="mainTweetContainer"/>
+
+    <!-- TODO(Faraz - Phase 3): fx:id="repliesContainer" - flat list of replies -->
+    <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS">
+        <VBox fx:id="repliesContainer" spacing="8.0"/>
+    </ScrollPane>
+
+</VBox>
