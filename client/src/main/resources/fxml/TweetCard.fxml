@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+============================================================
+Owner: Faraz (Frontend) | Phase 2 (Day 6-8) base + Phase 3 (like/reply buttons)
+============================================================
+A single card that displays one tweet. This fxml is built many times (one
+per tweet in the feed), so there should be no global logic in here.
+-->
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox spacing="6.0" style="-fx-border-color: #d0d0d0; -fx-border-radius: 6; -fx-background-radius: 6;"
+      xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.twitterclone.client.controller.TweetCardController">
+    <padding>
+        <Insets top="10" right="12" bottom="10" left="12"/>
+    </padding>
+
+    <HBox spacing="8.0">
+        <Label fx:id="authorLabel" style="-fx-font-weight: bold;"/>
+        <Label fx:id="timestampLabel" style="-fx-text-fill: gray;"/>
+    </HBox>
+
+    <!-- TODO(Faraz): wrapText should be true so long text doesn't overflow (one of the Phase 4 visual bugs) -->
+    <Label fx:id="contentLabel" wrapText="true"/>
+
+    <HBox spacing="10.0">
+        <!-- TODO(Faraz - Phase 3): onAction is wired to TweetCardController#onLikeButtonClick -->
+        <Button fx:id="likeButton" text="Like (0)" onAction="#onLikeButtonClick"/>
+        <!-- TODO(Faraz - Phase 3): onAction is wired to TweetCardController#onReplyButtonClick -->
+        <Button fx:id="replyButton" text="Reply" onAction="#onReplyButtonClick"/>
+    </HBox>
+
+</VBox>

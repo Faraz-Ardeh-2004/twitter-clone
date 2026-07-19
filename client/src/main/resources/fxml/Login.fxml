@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+============================================================
+Owner: Faraz (Frontend) | Phase 1 - Day 3-5
+============================================================
+Per the spec: build this "as fast as possible with Scene Builder, no
+graphical fussing" - it only needs to work, polish is for Phase 4.
+
+TODO(Faraz): you can open this file in Scene Builder and edit it visually;
+just be careful to keep the fx:id values that LoginController depends on.
+-->
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox alignment="CENTER" spacing="12.0" xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.twitterclone.client.controller.LoginController">
+    <padding>
+        <Insets bottom="40.0" left="40.0" right="40.0" top="40.0"/>
+    </padding>
+
+    <Label text="Twitter Clone - Login" style="-fx-font-size: 20px;"/>
+
+    <!-- TODO(Faraz): validate not-empty for this field in LoginController -->
+    <TextField fx:id="usernameField" promptText="Username" maxWidth="260"/>
+
+    <!-- TODO(Faraz): validate minimum password length in LoginController -->
+    <PasswordField fx:id="passwordField" promptText="Password" maxWidth="260"/>
+
+    <!-- TODO(Faraz): onAction is wired to LoginController#onLoginButtonClick -->
+    <Button fx:id="loginButton" text="Login" onAction="#onLoginButtonClick"/>
+
+    <!-- TODO(Faraz): populate this from LoginController (e.g. "wrong password") -->
+    <Label fx:id="statusLabel" textFill="RED"/>
+
+    <!-- TODO(Faraz): this button should switch the scene to Register.fxml -->
+    <Button fx:id="goToRegisterButton" text="Create an account" onAction="#onGoToRegisterClick"/>
+
+</VBox>
