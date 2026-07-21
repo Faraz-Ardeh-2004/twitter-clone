@@ -6,73 +6,91 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 /**
- * ============================================================
- * Owner: AmirAli (Database) | Phase 1 - Day 3-5
- * ============================================================
- * All SQL access related to the users table is centralized here. Hesam
- * (Backend) only calls these methods and never writes raw SQL inside
- * Handlers.
- *
- * TODO(AmirAli): prerequisite - create the users table per the spec (id,
- * username, unique email, hashed password). See/complete schema.sql.
- *
- * Important security note: always use PreparedStatement with '?' , never
- * string concatenation to build a query (to prevent SQL Injection).
+ * Handles all SQL access related to the users table.
+ * Hesam (backend) only calls these methods and never writes raw SQL
+ * directly inside his Handlers - everything goes through here.
  */
 public class UserDAO {
 
     /**
-     * TODO(AmirAli): save a new user to the database.
-     * Suggested steps:
-     *   1. Assume user.getPasswordHash() is already populated using
-     *      PasswordUtil.hash(...) (this should happen in AuthHandler before
-     *      calling insertUser, or you can design this method to take the raw
-     *      password and hash it internally - pick one as a team and stick to it).
-     *   2. INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)
-     *   3. Get the auto-generated id (Statement.RETURN_GENERATED_KEYS) and set it on User.
-     * @return the User with its id populated, or throw SQLException if a
-     * UNIQUE constraint is violated (duplicate username/email).
+     * Saves a new user to the database.
+     * Note: this assumes the password is already hashed by the time it
+     * gets here (i.e. PasswordUtil.hash(...) was called somewhere before
+     * this). Never store a raw password directly.
      */
     public User insertUser(User user) throws SQLException {
-        throw new UnsupportedOperationException("TODO(AmirAli): implement insertUser in Phase 1");
+        String sql = "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, user.getUsername());
+            stmt.setString(2, user.getEmail());
+            stmt.setString(3, user.getPasswordHash());
+            stmt.executeUpdate();
+
+            // Grab the auto-generated id Postgres assigned and set it on
+            // the User object, so the caller knows what id it got.
+            try (ResultSet keys = stmt.getGeneratedKeys()) {
+                if (keys.next()) {
+                    user.setId(keys.getInt(1));
+                }
+            }
+        }
+        return user;
     }
 
     /**
-     * TODO(AmirAli): find a user by username.
-     * SELECT id, username, email, password_hash FROM users WHERE username = ?
-     * @return User (including passwordHash so it can be checked in AuthHandler), or null if not found.
+     * Finds a user by username.
+     * Main use case is login: Hesam calls this in AuthHandler to fetch the
+     * user, then compares the returned passwordHash using PasswordUtil.check(...).
      */
     public User getUserByUsername(String username) throws SQLException {
-        throw new UnsupportedOperationException("TODO(AmirAli): implement getUserByUsername in Phase 1");
+        String sql = "SELECT id, username, email, password_hash FROM users WHERE username = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, username);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        }
+        // No match found - caller (e.g. AuthHandler) needs to handle null.
+        return null;
     }
 
     /**
-     * TODO(AmirAli - Phase 1 or wherever needed): fetch a user's info by id
-     * (e.g. when building Tweet.authorUsername or displaying a profile).
+     * Finds a user by id.
+     * Mostly useful when you only have an author_id from a tweet and need
+     * to resolve it to an actual username/profile info.
      */
     public User getUserById(int userId) throws SQLException {
-        throw new UnsupportedOperationException("TODO(AmirAli): implement getUserById");
+        String sql = "SELECT id, username, email, password_hash FROM users WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        }
+        return null;
     }
 
-    /** TODO(AmirAli - Phase 4 search): ILIKE %query% on username. See SearchDAO. */
-
-    // Helper example so you don't forget the try-with-resources pattern:
-    //
-    // try (Connection conn = DatabaseConnection.getInstance().getConnection();
-    //      PreparedStatement stmt = conn.prepareStatement("SELECT ... WHERE username = ?")) {
-    //     stmt.setString(1, username);
-    //     try (ResultSet rs = stmt.executeQuery()) {
-    //         if (rs.next()) {
-    //             User u = new User();
-    //             u.setId(rs.getInt("id"));
-    //             u.setUsername(rs.getString("username"));
-    //             u.setEmail(rs.getString("email"));
-    //             u.setPasswordHash(rs.getString("password_hash"));
-    //             return u;
-    //         }
-    //     }
-    // }
-    // return null;
+    /**
+     * Maps one row from the result set into a User object.
+     * Pulled into its own method since the same mapping logic was getting
+     * copy-pasted across the methods above.
+     */
+    private User mapRow(ResultSet rs) throws SQLException {
+        User u = new User();
+        u.setId(rs.getInt("id"));
+        u.setUsername(rs.getString("username"));
+        u.setEmail(rs.getString("email"));
+        u.setPasswordHash(rs.getString("password_hash"));
+        return u;
+    }
 }
