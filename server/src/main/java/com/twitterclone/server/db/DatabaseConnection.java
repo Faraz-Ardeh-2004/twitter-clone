@@ -28,9 +28,10 @@ public class DatabaseConnection {
     private final HikariDataSource dataSource;
 
     // TODO(AmirAli): replace these values with your actual database settings.
-    private static final String JDBC_URL = "jdbc:postgresql://localhost:5432/twitter_clone";
-    private static final String DB_USER = "postgres";
-    private static final String DB_PASSWORD = "CHANGE_ME";
+    private static final String JDBC_URL = System.getenv().getOrDefault(
+            "DB_URL", "jdbc:postgresql://localhost:5432/twitter_clone");
+    private static final String DB_USER = System.getenv().getOrDefault("DB_USER", "phipsitheta");
+    private static final String DB_PASSWORD = System.getenv().getOrDefault("DB_PASSWORD", "");
 
     private DatabaseConnection() {
         HikariConfig config = new HikariConfig();
