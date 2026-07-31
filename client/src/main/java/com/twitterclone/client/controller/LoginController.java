@@ -3,6 +3,7 @@ package com.twitterclone.client.controller;
 import com.google.gson.JsonObject;
 import com.twitterclone.client.network.NetworkService;
 import com.twitterclone.client.network.UserContext;
+import com.twitterclone.client.util.SceneNavigator;
 import com.twitterclone.shared.protocol.Packet;
 import com.twitterclone.shared.protocol.PacketType;
 import javafx.fxml.FXML;
@@ -16,6 +17,10 @@ import javafx.scene.control.TextField;
  * Owner: Faraz (Frontend) | Phase 1 - Day 3-5
  * ============================================================
  * Controller for Login.fxml. The fx:id fields below must match that file exactly.
+ *
+ * NOTE: assumes AuthHandler's LOGIN response payload contains "userId"
+ * (int) alongside the token - coordinate with Hesam if he settles on a
+ * different shape.
  */
 public class LoginController {
 
@@ -34,35 +39,35 @@ public class LoginController {
     @FXML
     private Button goToRegisterButton;
 
-    /**
-     * TODO(Faraz):
-     *  1. Read the values of usernameField/passwordField.
-     *  2. Basic validation: if either is empty, set statusLabel and return
-     *     (don't send anything to the server).
-     *  3. Build a JsonObject payload: {"username": ..., "password": ...}
-     *  4. Packet request = Packet.request(PacketType.LOGIN, null, payload)
-     *  5. Call NetworkService.getInstance().sendRequest(request, response -> { ... }).
-     *  6. Inside the callback (already running on the JavaFX thread, no need
-     *     to worry about Platform.runLater):
-     *     - if response.getStatus() is "OK": populate
-     *       UserContext.getInstance().setSession(token, userId, username)
-     *       (read token/userId from response.getToken() and
-     *       response.getPayload()) and switch the scene to Dashboard.fxml
-     *       (see the FXMLLoader pattern in ClientMain).
-     *     - if status is "ERROR": statusLabel.setText(response.getMessage())
-     */
     @FXML
     private void onLoginButtonClick() {
-        // TODO(Faraz): full implementation per the guide above.
+        String username = usernameField.getText();
+        String password = passwordField.getText();
+
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            statusLabel.setText("Username and password are required.");
+            return;
+        }
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("username", username);
+        payload.addProperty("password", password);
+
+        loginButton.setDisable(true);
+        NetworkService.getInstance().sendRequest(Packet.request(PacketType.LOGIN, null, payload), response -> {
+            loginButton.setDisable(false);
+            if ("OK".equals(response.getStatus())) {
+                int userId = response.getPayload().get("userId").getAsInt();
+                UserContext.getInstance().setSession(response.getToken(), userId, username);
+                SceneNavigator.switchScene(loginButton, "/fxml/Dashboard.fxml");
+            } else {
+                statusLabel.setText(response.getMessage() != null ? response.getMessage() : "Login failed.");
+            }
+        });
     }
 
-    /**
-     * TODO(Faraz): swap the current Stage's scene for Register.fxml.
-     * Hint: loginButton.getScene().getWindow() gives you the Stage; use the
-     * same FXMLLoader pattern used in ClientMain.start.
-     */
     @FXML
     private void onGoToRegisterClick() {
-        // TODO(Faraz): full implementation per the guide above.
+        SceneNavigator.switchScene(goToRegisterButton, "/fxml/Register.fxml");
     }
 }
