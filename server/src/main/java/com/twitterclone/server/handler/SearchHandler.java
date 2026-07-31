@@ -72,8 +72,9 @@ public class SearchHandler {
         }
         try {
             List<Tweet> tweets = tweetDAO.getTweetsByHashtag(tag, userId);
+            String canonicalTag = hashtagDAO.getCanonicalTag(tag);
             JsonObject out = new JsonObject();
-            out.addProperty("hashtag", tag.toLowerCase());
+            out.addProperty("hashtag", canonicalTag);
             out.add("tweets", Json.array(tweets));
             return Packet.ok(PacketType.SEARCH_HASHTAG, out);
         } catch (SQLException e) {

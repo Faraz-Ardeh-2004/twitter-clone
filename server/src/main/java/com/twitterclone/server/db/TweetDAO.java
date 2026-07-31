@@ -251,8 +251,8 @@ public class TweetDAO {
         String sql = SINGLE_SELECT +
                 "JOIN tweet_hashtags th ON th.tweet_id = d.id " +
                 "JOIN hashtags h ON h.id = th.hashtag_id " +
-                "WHERE h.tag = ? ORDER BY d.created_at DESC LIMIT 100";
-        return query(sql, viewerId, ps -> ps.setString(3, tag.toLowerCase()));
+                "WHERE LOWER(h.tag) = LOWER(?) ORDER BY d.created_at DESC LIMIT 100";
+        return query(sql, viewerId, ps -> ps.setString(3, tag));
     }
 
     public Integer getAuthorId(int tweetId) throws SQLException {

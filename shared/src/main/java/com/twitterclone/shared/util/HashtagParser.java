@@ -26,7 +26,7 @@ public final class HashtagParser {
         if (text != null) {
             Matcher m = HASHTAG.matcher(text);
             while (m.find()) {
-                tags.add(m.group(1).toLowerCase());
+                tags.add(m.group(1));
             }
         }
         return new ArrayList<>(tags);
