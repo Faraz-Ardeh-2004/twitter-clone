@@ -6,6 +6,9 @@ target/
 .DS_Store
 *.log
 
+# Maven Shade plugin byproduct
+dependency-reduced-pom.xml
+
 # If you keep local database settings in a separate file instead of
 # hardcoding a password in DatabaseConnection.java (recommended), add that
 # file here, e.g.:

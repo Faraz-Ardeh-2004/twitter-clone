@@ -46,10 +46,26 @@ public enum PacketType {
     LIKE_TWEET,
     UNLIKE_TWEET,
 
+    // ---------- retweets / reposts (Phase 3 bonus) ----------
+    RETWEET,        // client -> server: repost (or quote) an existing tweet
+    UNDO_RETWEET,   // client -> server: remove your repost of a tweet
+
+    // ---------- profiles (Phase 1/3) ----------
+    GET_PROFILE,    // client -> server: fetch a user's profile + stats (by userId or username)
+    UPDATE_PROFILE, // client -> server: edit display name, bio, avatar, banner
+
     // ---------- search (Phase 4 - logic owner: Hesam + queries by AmirAli) ----------
     SEARCH_USERS,
-    SEARCH_TWEETS
+    SEARCH_TWEETS,
+    SEARCH_HASHTAG, // client -> server: tweets carrying a given hashtag
+    TRENDING_HASHTAGS, // client -> server: most-used hashtags recently
 
-    // TODO(bonus): if you implement bonus features, add new types here (e.g.
-    // DIRECT_MESSAGE, QUOTE_TWEET, NOTIFICATION_PUSH, etc.)
+    // ---------- notifications (bonus) ----------
+    GET_NOTIFICATIONS,  // client -> server: list this user's notifications
+    MARK_NOTIFICATIONS_READ,
+
+    // ---------- real-time server pushes (server -> client, unsolicited) ----------
+    LIKE_PUSH,          // a tweet you can see gained/lost a like
+    FOLLOW_PUSH,        // someone followed/unfollowed you
+    NOTIFICATION_PUSH   // a new notification for you
 }

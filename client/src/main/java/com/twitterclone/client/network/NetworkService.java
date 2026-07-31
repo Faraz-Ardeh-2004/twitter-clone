@@ -3,7 +3,6 @@ package com.twitterclone.client.network;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.twitterclone.shared.protocol.Packet;
-import com.twitterclone.shared.protocol.PacketType;
 import javafx.application.Platform;
 
 import java.io.BufferedReader;
@@ -12,32 +11,22 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * ============================================================
- * Owner: Faraz (Frontend) | Phase 0 (base skeleton) -> Phase 2 (listening for pushes)
- * ============================================================
- * Singleton that keeps the main socket open and has a background thread that
- * continuously waits for incoming messages from the server (whether they're
- * responses to requests or real-time pushes like NEW_TWEET_PUSH).
+ * Singleton network layer for the client. Keeps one socket open for the whole
+ * app and runs a background listener thread that reads every incoming line.
  *
- * Usage pattern from controllers:
- *   NetworkService.getInstance().sendRequest(
- *       Packet.request(PacketType.LOGIN, null, payload),
- *       response -> { ... whatever needs to happen with the response, called on the UI thread ... }
- *   );
- *
- * WARNING: this design is intentionally simple - each callback is matched by
- * message "type", not by a dedicated requestId (the current protocol doesn't
- * have such a field). This means if you send two requests of the same type
- * at once, whichever response arrives first will trigger the callback. For
- * this project's sequential flows (a user submits one form and waits for its
- * answer) this is enough; if you need something more robust later, talk to
- * Hesam first since it would require adding a new field (e.g. requestId) to
- * the shared Packet class.
+ * Correlation model: each request carries a unique requestId (set by
+ * Packet.request). A response echoes that id, so its callback is matched
+ * exactly — even if several requests of the same type are in flight. Messages
+ * with no requestId are unsolicited server pushes (NEW_TWEET_PUSH, LIKE_PUSH,
+ * FOLLOW_PUSH, NOTIFICATION_PUSH); those are delivered to listeners registered
+ * per packet type. All callbacks run on the JavaFX Application Thread.
  */
 public class NetworkService {
 
@@ -51,11 +40,14 @@ public class NetworkService {
 
     private final Gson gson = new Gson();
 
-    // message type (String) -> callback waiting for a response of that type
+    // requestId -> callback awaiting that specific response
     private final Map<String, Consumer<Packet>> pendingCallbacks = new ConcurrentHashMap<>();
 
-    // global callback for push messages (unsolicited), e.g. NEW_TWEET_PUSH
-    private volatile Consumer<Packet> pushListener;
+    // push packet type -> listeners interested in it
+    private final Map<String, List<Consumer<Packet>>> pushListeners = new ConcurrentHashMap<>();
+
+    // invoked (on the FX thread) if the connection to the server drops
+    private volatile Runnable onDisconnect;
 
     private NetworkService() {
     }
@@ -64,7 +56,7 @@ public class NetworkService {
         return INSTANCE;
     }
 
-    /** Initial connection to the server. Should only be called once (in ClientMain.start). */
+    /** Opens the connection. Call once at app start. */
     public void connect(String host, int port) throws IOException {
         socket = new Socket(host, port);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
@@ -76,6 +68,10 @@ public class NetworkService {
         listenerThread.start();
     }
 
+    public boolean isConnected() {
+        return running && socket != null && !socket.isClosed();
+    }
+
     public void disconnect() {
         running = false;
         try {
@@ -84,33 +80,42 @@ public class NetworkService {
         }
     }
 
-    /**
-     * Sends a request to the server and registers a callback for when the
-     * response of the same type arrives.
-     */
+    /** Sends a request and registers a callback for its matching response. */
     public void sendRequest(Packet request, Consumer<Packet> onResponse) {
+        // Attach the session token automatically unless the caller set one.
         if (request.getToken() == null && UserContext.getInstance().isLoggedIn()) {
             request.setToken(UserContext.getInstance().getToken());
         }
-        pendingCallbacks.put(request.getType(), onResponse);
-        out.println(gson.toJson(request));
+        if (onResponse != null && request.getRequestId() != null) {
+            pendingCallbacks.put(request.getRequestId(), onResponse);
+        }
+        synchronized (this) {
+            out.println(gson.toJson(request));
+        }
     }
 
-    /** Registers a global listener for push messages (e.g. NEW_TWEET_PUSH). Called only once, in DashboardController. */
-    public void setPushListener(Consumer<Packet> listener) {
-        this.pushListener = listener;
+    /** Registers a listener for a given push packet type (e.g. NEW_TWEET_PUSH). */
+    public void addPushListener(String type, Consumer<Packet> listener) {
+        pushListeners.computeIfAbsent(type, k -> new CopyOnWriteArrayList<>()).add(listener);
     }
 
-    /**
-     * TODO(Faraz - Phase 0 initial test, completed in Phase 2): the main loop
-     * of the background thread. Reads every incoming line, converts it to a
-     * Packet, and decides based on its type whether to call a waiting
-     * callback or treat it as a push.
-     *
-     * WARNING - critical JavaFX note: this method runs on a thread other than
-     * the JavaFX Application Thread. Never update the UI directly from here;
-     * always use Platform.runLater(...) (already wired in below).
-     */
+    public void removePushListener(String type, Consumer<Packet> listener) {
+        List<Consumer<Packet>> list = pushListeners.get(type);
+        if (list != null) {
+            list.remove(listener);
+        }
+    }
+
+    /** Drops all push listeners and pending callbacks (used on logout). */
+    public void clearListeners() {
+        pushListeners.clear();
+        pendingCallbacks.clear();
+    }
+
+    public void setOnDisconnect(Runnable handler) {
+        this.onDisconnect = handler;
+    }
+
     private void listenLoop() {
         try {
             String line;
@@ -119,31 +124,34 @@ public class NetworkService {
                 try {
                     packet = gson.fromJson(line, Packet.class);
                 } catch (JsonSyntaxException e) {
-                    continue; // TODO(Faraz): log if needed, but don't crash
+                    continue;
                 }
-
                 if (packet == null || packet.getType() == null) {
                     continue;
                 }
 
-                Packet finalPacket = packet;
-
-                if (PacketType.NEW_TWEET_PUSH.name().equals(packet.getType())) {
-                    // TODO(Faraz - Phase 2): this is a push, not a response to a request.
-                    if (pushListener != null) {
-                        Platform.runLater(() -> pushListener.accept(finalPacket));
+                final Packet p = packet;
+                String requestId = packet.getRequestId();
+                if (requestId != null) {
+                    Consumer<Packet> callback = pendingCallbacks.remove(requestId);
+                    if (callback != null) {
+                        Platform.runLater(() -> callback.accept(p));
+                        continue;
                     }
-                    continue;
                 }
-
-                Consumer<Packet> callback = pendingCallbacks.remove(packet.getType());
-                if (callback != null) {
-                    Platform.runLater(() -> callback.accept(finalPacket));
+                // Otherwise it's a push: fan out to listeners for this type.
+                List<Consumer<Packet>> listeners = pushListeners.get(packet.getType());
+                if (listeners != null) {
+                    for (Consumer<Packet> l : listeners) {
+                        Platform.runLater(() -> l.accept(p));
+                    }
                 }
-                // TODO(Faraz): if no callback was found (unexpected message), you can log it.
             }
         } catch (IOException e) {
-            System.out.println("Connection to server lost: " + e.getMessage());
+            // fall through to disconnect handling
+        }
+        if (running && onDisconnect != null) {
+            Platform.runLater(onDisconnect);
         }
     }
 }

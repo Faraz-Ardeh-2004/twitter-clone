@@ -1,77 +1,171 @@
 package com.twitterclone.server.handler;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.twitterclone.server.auth.Authenticator;
+import com.twitterclone.server.db.NotificationDAO;
 import com.twitterclone.server.db.TweetDAO;
 import com.twitterclone.server.network.ConnectionRegistry;
+import com.twitterclone.server.util.Json;
+import com.twitterclone.shared.model.Notification;
 import com.twitterclone.shared.model.Tweet;
 import com.twitterclone.shared.protocol.Packet;
 import com.twitterclone.shared.protocol.PacketType;
+import com.twitterclone.shared.protocol.Protocol;
+
+import java.sql.SQLException;
+import java.util.List;
 
 /**
- * ============================================================
- * Owner: Hesam (Backend) | Phase 2 (Day 6-8) base + Phase 3 (Day 9-11) personalized feed
- * ============================================================
- * Tweet business logic. The most important part: after saving a new tweet,
- * "push" it to online clients (NEW_TWEET_PUSH) - this is what creates the
- * real-time experience.
+ * Tweet business logic. The key real-time moment: after saving a top-level
+ * tweet, it is pushed (NEW_TWEET_PUSH) to the author and their online
+ * followers. Replies instead notify the parent author (NOTIFICATION_PUSH).
  *
- * Expected payload shapes (coordinate with Faraz):
- *   CREATE_TWEET -> { "content": "...", "parentTweetId": null or a number }
- *   DELETE_TWEET -> { "tweetId": 123 }
- *   GET_FEED     -> { "limit": 20, "offset": 0 }
+ * Expected payloads:
+ *   CREATE_TWEET   -> { "content": "...", "parentTweetId": null|int, "media": ["data:...", ...] }
+ *   DELETE_TWEET   -> { "tweetId": int }
+ *   GET_TWEET      -> { "tweetId": int }
+ *   GET_USER_TWEETS-> { "userId": int }   (defaults to the requester)
+ *   GET_FEED       -> { "limit": int, "offset": int, "global": bool }
  */
 public class TweetHandler {
 
     private static final TweetDAO tweetDAO = new TweetDAO();
-    private static final Gson gson = new Gson();
+    private static final NotificationDAO notificationDAO = new NotificationDAO();
 
     private TweetHandler() {
     }
 
-    /**
-     * TODO(Hesam - Phase 2):
-     *  1. Validate the token with Authenticator.validate(request.getToken()) -> userId.
-     *  2. Read content from the payload (and, per the bonus rules, enforce a
-     *     length limit if you implement it).
-     *  3. Build a new Tweet (authorId=userId, content, createdAt=now) and call tweetDAO.saveTweet(tweet).
-     *  4. Build a NEW_TWEET_PUSH packet with payload = the new tweet (serialized with Gson).
-     *  5. TODO(Phase 2, simple): ConnectionRegistry.broadcastToAll(pushPacket)
-     *     TODO(Phase 3, better): ConnectionRegistry.broadcastToFollowers(userId, pushPacket)
-     *  6. Return Packet.ok(PacketType.CREATE_TWEET, payload) as the response
-     *     to the original request.
-     */
-    public static Packet handleCreateTweet(Packet request) {
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleCreateTweet in Phase 2");
+    public static Packet handleCreateTweet(Packet request, int userId) {
+        JsonObject payload = request.getPayload();
+        if (payload == null) {
+            return Packet.error(PacketType.CREATE_TWEET, "Missing payload");
+        }
+        String content = Json.getString(payload, "content");
+        content = content == null ? "" : content.trim();
+        Integer parentId = Json.getIntOrNull(payload, "parentTweetId");
+        List<String> media = Json.getStringList(payload, "media");
+
+        if (content.isEmpty() && media.isEmpty()) {
+            return Packet.error(PacketType.CREATE_TWEET, "A tweet needs text or an image");
+        }
+        if (content.length() > Protocol.MAX_TWEET_LENGTH) {
+            return Packet.error(PacketType.CREATE_TWEET,
+                    "Tweet exceeds the " + Protocol.MAX_TWEET_LENGTH + " character limit");
+        }
+        if (media.size() > Protocol.MAX_MEDIA_PER_TWEET) {
+            return Packet.error(PacketType.CREATE_TWEET,
+                    "At most " + Protocol.MAX_MEDIA_PER_TWEET + " images per tweet");
+        }
+        for (String m : media) {
+            if (m.length() > Protocol.MAX_MEDIA_BASE64_LENGTH) {
+                return Packet.error(PacketType.CREATE_TWEET, "One of the images is too large");
+            }
+        }
+
+        try {
+            Tweet tweet = tweetDAO.createTweet(userId, content, parentId, media);
+
+            if (parentId == null) {
+                // Top-level tweet: push into followers' feeds in real time.
+                JsonObject pushPayload = Json.tree(tweet).getAsJsonObject();
+                ConnectionRegistry.broadcastToFollowers(userId, Packet.push(PacketType.NEW_TWEET_PUSH, pushPayload));
+            } else {
+                // Reply: notify the author of the parent tweet.
+                Integer parentAuthor = tweetDAO.getAuthorId(parentId);
+                if (parentAuthor != null) {
+                    notifyAndPush(parentAuthor, userId, "REPLY", parentId);
+                }
+            }
+
+            JsonObject out = new JsonObject();
+            out.add("tweet", Json.tree(tweet));
+            return Packet.ok(PacketType.CREATE_TWEET, out);
+        } catch (SQLException e) {
+            System.err.println("createTweet failed: " + e.getMessage());
+            return Packet.error(PacketType.CREATE_TWEET, "Could not publish tweet");
+        }
     }
 
-    /**
-     * TODO(Hesam - Phase 2): read tweetId, call tweetDAO.deleteTweet(tweetId, userId)
-     * (only the owner may delete - put this check here or in the DAO).
-     */
-    public static Packet handleDeleteTweet(Packet request) {
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleDeleteTweet in Phase 2");
+    public static Packet handleDeleteTweet(Packet request, int userId) {
+        Integer tweetId = Json.getIntOrNull(request.getPayload(), "tweetId");
+        if (tweetId == null) {
+            return Packet.error(PacketType.DELETE_TWEET, "Missing tweetId");
+        }
+        try {
+            boolean deleted = tweetDAO.deleteTweet(tweetId, userId);
+            if (!deleted) {
+                return Packet.error(PacketType.DELETE_TWEET, "Tweet not found or not yours to delete");
+            }
+            JsonObject out = new JsonObject();
+            out.addProperty("tweetId", tweetId);
+            return Packet.ok(PacketType.DELETE_TWEET, out);
+        } catch (SQLException e) {
+            System.err.println("deleteTweet failed: " + e.getMessage());
+            return Packet.error(PacketType.DELETE_TWEET, "Could not delete tweet");
+        }
     }
 
-    /** TODO(Hesam - Phase 3): a specific tweet with details (for the reply page). */
-    public static Packet handleGetTweet(Packet request) {
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleGetTweet in Phase 3");
+    public static Packet handleGetTweet(Packet request, int userId) {
+        Integer tweetId = Json.getIntOrNull(request.getPayload(), "tweetId");
+        if (tweetId == null) {
+            return Packet.error(PacketType.GET_TWEET, "Missing tweetId");
+        }
+        try {
+            Tweet tweet = tweetDAO.getTweetById(tweetId, userId);
+            if (tweet == null) {
+                return Packet.error(PacketType.GET_TWEET, "Tweet not found");
+            }
+            List<Tweet> replies = tweetDAO.getReplies(tweetId, userId);
+            JsonObject out = new JsonObject();
+            out.add("tweet", Json.tree(tweet));
+            out.add("replies", Json.array(replies));
+            return Packet.ok(PacketType.GET_TWEET, out);
+        } catch (SQLException e) {
+            System.err.println("getTweet failed: " + e.getMessage());
+            return Packet.error(PacketType.GET_TWEET, "Could not load tweet");
+        }
     }
 
-    /** TODO(Hesam - Phase 2): all tweets by a specific user (profile page). */
-    public static Packet handleGetUserTweets(Packet request) {
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleGetUserTweets in Phase 2");
+    public static Packet handleGetUserTweets(Packet request, int userId) {
+        int target = Json.getInt(request.getPayload(), "userId", userId);
+        try {
+            List<Tweet> tweets = tweetDAO.getUserTweets(target, userId);
+            JsonObject out = new JsonObject();
+            out.add("tweets", Json.array(tweets));
+            return Packet.ok(PacketType.GET_USER_TWEETS, out);
+        } catch (SQLException e) {
+            System.err.println("getUserTweets failed: " + e.getMessage());
+            return Packet.error(PacketType.GET_USER_TWEETS, "Could not load tweets");
+        }
     }
 
-    /**
-     * TODO(Hesam):
-     *  Phase 2: use tweetDAO.getGlobalTweets(limit, offset) (simple global feed).
-     *  Phase 3: change this method to use
-     *  tweetDAO.getPersonalizedFeed(userId, limit, offset) instead (per the
-     *  Phase 3 DoD: personalized feed).
-     */
-    public static Packet handleGetFeed(Packet request) {
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleGetFeed in Phase 2 (update in Phase 3)");
+    public static Packet handleGetFeed(Packet request, int userId) {
+        JsonObject payload = request.getPayload();
+        int limit = clamp(Json.getInt(payload, "limit", 30), 1, 100);
+        int offset = Math.max(0, Json.getInt(payload, "offset", 0));
+        boolean global = Json.getBool(payload, "global", false);
+        try {
+            List<Tweet> tweets = global
+                    ? tweetDAO.getGlobalFeed(userId, limit, offset)
+                    : tweetDAO.getPersonalizedFeed(userId, limit, offset);
+            JsonObject out = new JsonObject();
+            out.add("tweets", Json.array(tweets));
+            return Packet.ok(PacketType.GET_FEED, out);
+        } catch (SQLException e) {
+            System.err.println("getFeed failed: " + e.getMessage());
+            return Packet.error(PacketType.GET_FEED, "Could not load feed");
+        }
+    }
+
+    /** Persists a notification and pushes it to the recipient if they are online. */
+    static void notifyAndPush(int recipientId, int actorId, String type, Integer tweetId) throws SQLException {
+        Notification n = notificationDAO.create(recipientId, actorId, type, tweetId);
+        if (n != null) {
+            ConnectionRegistry.sendTo(recipientId,
+                    Packet.push(PacketType.NOTIFICATION_PUSH, Json.tree(n).getAsJsonObject()));
+        }
+    }
+
+    private static int clamp(int v, int lo, int hi) {
+        return Math.max(lo, Math.min(hi, v));
     }
 }

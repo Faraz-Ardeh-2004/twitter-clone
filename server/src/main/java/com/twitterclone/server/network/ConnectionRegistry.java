@@ -1,8 +1,11 @@
 package com.twitterclone.server.network;
 
+import com.twitterclone.server.db.FollowDAO;
 import com.twitterclone.shared.protocol.Packet;
 
+import java.sql.SQLException;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -27,6 +30,7 @@ import java.util.concurrent.ConcurrentMap;
 public class ConnectionRegistry {
 
     private static final ConcurrentMap<Integer, ClientHandler> ONLINE_USERS = new ConcurrentHashMap<>();
+    private static final FollowDAO followDAO = new FollowDAO();
 
     private ConnectionRegistry() {
         // utility class - should not be instantiated
@@ -59,16 +63,29 @@ public class ConnectionRegistry {
         }
     }
 
+    /** Sends a packet to a single user if they are currently online. */
+    public static void sendTo(int userId, Packet packet) {
+        ClientHandler handler = ONLINE_USERS.get(userId);
+        if (handler != null) {
+            handler.sendPacket(packet);
+        }
+    }
+
     /**
-     * TODO(Hesam - Phase 3, once the follows table exists via AmirAli): send
-     * the packet only to followers of authorId who are currently online, not
-     * to everyone.
-     * Suggested implementation:
-     *   1. get followerIds via FollowDAO.getFollowerIds(authorId)
-     *   2. for each id, if isOnline, call get(id).sendPacket(packet)
+     * Real-time delivery: sends the packet to the author and to every follower
+     * of the author who is currently online. This is what makes newly published
+     * tweets appear in followers' feeds without a manual refresh.
      */
     public static void broadcastToFollowers(int authorId, Packet packet) {
-        throw new UnsupportedOperationException("TODO(Hesam): implement in Phase 3 once FollowDAO is ready");
+        sendTo(authorId, packet);
+        try {
+            List<Integer> followerIds = followDAO.getFollowerIds(authorId);
+            for (int followerId : followerIds) {
+                sendTo(followerId, packet);
+            }
+        } catch (SQLException e) {
+            System.err.println("broadcastToFollowers failed: " + e.getMessage());
+        }
     }
 
     /** Useful for debugging / the Phase 4 concurrency test. */

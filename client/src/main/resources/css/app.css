@@ -1,0 +1,158 @@
+/* ============================================================
+   Twitter Clone — theme stylesheet (light default + .dark variant)
+   The dark theme is enabled by adding the "dark" style class to the scene
+   root (see Theme.apply). Colors follow X/Twitter's palette.
+   ============================================================ */
+
+.root {
+    -fx-accent-color: #1d9bf0;
+    -fx-bg: #ffffff;
+    -fx-bg-alt: #f7f9f9;
+    -fx-text: #0f1419;
+    -fx-text-muted: #536471;
+    -fx-border: #eff3f4;
+    -fx-card: #ffffff;
+    -fx-hover: #f7f9f9;
+    -fx-font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-background-color: -fx-bg;
+}
+
+.root.dark {
+    -fx-bg: #15202b;
+    -fx-bg-alt: #1e2732;
+    -fx-text: #f7f9f9;
+    -fx-text-muted: #8b98a5;
+    -fx-border: #38444d;
+    -fx-card: #15202b;
+    -fx-hover: #1e2732;
+    -fx-background-color: -fx-bg;
+}
+
+/* ---- generic text ---- */
+.label { -fx-text-fill: -fx-text; }
+.text-muted { -fx-text-fill: -fx-text-muted; }
+.title { -fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: -fx-text; }
+.h2 { -fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: -fx-text; }
+
+/* ---- scroll panes ---- */
+.scroll-pane, .scroll-pane .viewport { -fx-background-color: transparent; }
+.scroll-pane > .corner { -fx-background-color: transparent; }
+
+/* ---- side navigation ---- */
+.nav {
+    -fx-background-color: -fx-bg;
+    -fx-border-color: -fx-border;
+    -fx-border-width: 0 1 0 0;
+}
+.nav-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -fx-text;
+    -fx-font-size: 15px;
+    -fx-alignment: center-left;
+    -fx-padding: 12 18 12 18;
+    -fx-background-radius: 24;
+    -fx-cursor: hand;
+}
+.nav-button:hover { -fx-background-color: -fx-hover; }
+.nav-button.active { -fx-font-weight: bold; -fx-text-fill: -fx-accent-color; }
+
+/* ---- primary / accent buttons ---- */
+.btn-primary {
+    -fx-background-color: -fx-accent-color;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 24;
+    -fx-padding: 8 20 8 20;
+    -fx-cursor: hand;
+}
+.btn-primary:hover { -fx-background-color: #1a8cd8; }
+.btn-primary:disabled { -fx-opacity: 0.5; }
+
+.btn-outline {
+    -fx-background-color: transparent;
+    -fx-text-fill: -fx-accent-color;
+    -fx-border-color: -fx-accent-color;
+    -fx-border-radius: 24;
+    -fx-background-radius: 24;
+    -fx-padding: 6 16 6 16;
+    -fx-cursor: hand;
+}
+.btn-outline:hover { -fx-background-color: derive(-fx-accent-color, 85%); }
+
+/* ---- icon-ish action buttons on a tweet ---- */
+.action-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -fx-text-muted;
+    -fx-padding: 4 8 4 8;
+    -fx-cursor: hand;
+    -fx-background-radius: 16;
+}
+.action-button:hover { -fx-background-color: -fx-hover; -fx-text-fill: -fx-accent-color; }
+.action-button.liked { -fx-text-fill: #f91880; }
+.action-button.retweeted { -fx-text-fill: #00ba7c; }
+
+/* ---- text fields ---- */
+.text-field, .text-area, .password-field {
+    -fx-background-color: -fx-bg-alt;
+    -fx-text-fill: -fx-text;
+    -fx-prompt-text-fill: -fx-text-muted;
+    -fx-background-radius: 8;
+    -fx-border-color: -fx-border;
+    -fx-border-radius: 8;
+    -fx-padding: 8;
+}
+.text-area .content { -fx-background-color: -fx-bg-alt; }
+.text-field:focused, .text-area:focused, .password-field:focused {
+    -fx-border-color: -fx-accent-color;
+}
+
+/* ---- tweet card ---- */
+.tweet-card {
+    -fx-background-color: -fx-card;
+    -fx-border-color: -fx-border;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 12 16 12 16;
+    -fx-cursor: hand;
+}
+.tweet-card:hover { -fx-background-color: -fx-hover; }
+.tweet-author { -fx-font-weight: bold; -fx-text-fill: -fx-text; }
+.tweet-handle, .tweet-time { -fx-text-fill: -fx-text-muted; }
+.tweet-content { -fx-text-fill: -fx-text; -fx-font-size: 14px; }
+.tweet-context { -fx-text-fill: -fx-text-muted; -fx-font-size: 12px; }
+.hashtag { -fx-text-fill: -fx-accent-color; }
+
+/* ---- avatar circle ---- */
+.avatar {
+    -fx-background-color: -fx-accent-color;
+    -fx-background-radius: 100;
+    -fx-min-width: 44; -fx-min-height: 44; -fx-max-width: 44; -fx-max-height: 44;
+    -fx-alignment: center;
+}
+.avatar-label { -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 16px; }
+
+/* ---- profile header ---- */
+.profile-banner { -fx-background-color: -fx-accent-color; -fx-min-height: 140; }
+.stat-number { -fx-font-weight: bold; -fx-text-fill: -fx-text; }
+.verified { -fx-text-fill: -fx-accent-color; -fx-font-weight: bold; }
+
+/* ---- notifications ---- */
+.notif-row { -fx-padding: 12 16 12 16; -fx-border-color: -fx-border; -fx-border-width: 0 0 1 0; }
+.notif-unread { -fx-background-color: derive(-fx-accent-color, 90%); }
+.root.dark .notif-unread { -fx-background-color: -fx-bg-alt; }
+
+/* ---- auth screens ---- */
+.auth-card {
+    -fx-background-color: -fx-card;
+    -fx-background-radius: 16;
+    -fx-border-color: -fx-border;
+    -fx-border-radius: 16;
+    -fx-padding: 32;
+}
+.link-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: -fx-accent-color;
+    -fx-cursor: hand;
+    -fx-underline: true;
+    -fx-padding: 4;
+}
+.error-label { -fx-text-fill: #f4212e; }

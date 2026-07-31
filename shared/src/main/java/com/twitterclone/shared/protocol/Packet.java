@@ -1,6 +1,9 @@
 package com.twitterclone.shared.protocol;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
+import java.util.UUID;
 
 /**
  * ============================================================
@@ -28,10 +31,14 @@ import com.google.gson.JsonObject;
 public class Packet {
 
     private String type;      // one of the PacketType values (stored as a String)
+    private String requestId; // correlates a response to its request; null for pushes
     private String token;     // session token; empty for REGISTER/LOGIN
     private String status;    // "OK" or "ERROR" (only used in server responses)
     private String message;   // error message or short description (optional)
-    private JsonObject payload; // the main body of the message (fields specific to each type)
+    // Stored as JsonElement (not JsonObject) so an explicit "payload": null on
+    // the wire deserializes cleanly to JsonNull instead of throwing. The getter
+    // still exposes it as a JsonObject (or null) so callers are unaffected.
+    private JsonElement payload;
 
     public Packet() {
         // Empty constructor required so Gson can use it during deserialization
@@ -47,9 +54,15 @@ public class Packet {
 
     // ---------- Factory helpers (for convenience in Handler/NetworkService code) ----------
 
-    /** Builds a request packet sent from the client to the server. */
+    /**
+     * Builds a request packet sent from the client to the server. Each request
+     * gets a unique requestId so the client can match the eventual response to
+     * this exact call, even if several requests of the same type are in flight.
+     */
     public static Packet request(PacketType type, String token, JsonObject payload) {
-        return new Packet(type.name(), token, null, null, payload);
+        Packet p = new Packet(type.name(), token, null, null, payload);
+        p.requestId = UUID.randomUUID().toString();
+        return p;
     }
 
     /** Builds a successful response packet sent from the server. */
@@ -77,6 +90,14 @@ public class Packet {
         this.type = type;
     }
 
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
     public String getToken() {
         return token;
     }
@@ -102,7 +123,7 @@ public class Packet {
     }
 
     public JsonObject getPayload() {
-        return payload;
+        return (payload == null || payload.isJsonNull()) ? null : payload.getAsJsonObject();
     }
 
     public void setPayload(JsonObject payload) {

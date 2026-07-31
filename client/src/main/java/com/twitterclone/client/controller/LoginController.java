@@ -3,6 +3,7 @@ package com.twitterclone.client.controller;
 import com.google.gson.JsonObject;
 import com.twitterclone.client.network.NetworkService;
 import com.twitterclone.client.network.UserContext;
+import com.twitterclone.client.ui.AppShell;
 import com.twitterclone.client.util.SceneNavigator;
 import com.twitterclone.shared.protocol.Packet;
 import com.twitterclone.shared.protocol.PacketType;
@@ -11,6 +12,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
+import javafx.stage.Stage;
 
 /**
  * ============================================================
@@ -21,6 +23,7 @@ import javafx.scene.control.TextField;
  * NOTE: assumes AuthHandler's LOGIN response payload contains "userId"
  * (int) alongside the token - coordinate with Hesam if he settles on a
  * different shape.
+ *
  */
 public class LoginController {
 
@@ -56,10 +59,13 @@ public class LoginController {
         loginButton.setDisable(true);
         NetworkService.getInstance().sendRequest(Packet.request(PacketType.LOGIN, null, payload), response -> {
             loginButton.setDisable(false);
-            if ("OK".equals(response.getStatus())) {
-                int userId = response.getPayload().get("userId").getAsInt();
-                UserContext.getInstance().setSession(response.getToken(), userId, username);
-                SceneNavigator.switchScene(loginButton, "/fxml/Dashboard.fxml");
+            if ("OK".equals(response.getStatus()) && response.getPayload() != null) {
+                JsonObject p = response.getPayload();
+                int userId = p.get("userId").getAsInt();
+                String displayName = p.has("displayName") ? p.get("displayName").getAsString() : username;
+                String avatarUrl = p.has("avatarUrl") ? p.get("avatarUrl").getAsString() : null;
+                UserContext.getInstance().setSession(response.getToken(), userId, username, displayName, avatarUrl);
+                new AppShell((Stage) loginButton.getScene().getWindow());
             } else {
                 statusLabel.setText(response.getMessage() != null ? response.getMessage() : "Login failed.");
             }

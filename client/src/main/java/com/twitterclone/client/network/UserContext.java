@@ -1,19 +1,9 @@
 package com.twitterclone.client.network;
 
 /**
- * ============================================================
- * Owner: Faraz (Frontend) | Phase 1 - Day 3-5
- * ============================================================
- * A simple holder for the logged-in user's state (token + basic info) in the
- * client's memory. After a successful login, LoginController populates this
- * class; the rest of the controllers (Dashboard, TweetCard, ...) read the
- * token/username from here.
- *
- * TODO(Faraz):
- *  1. In LoginController, after a successful LOGIN response:
- *       UserContext.getInstance().setSession(token, userId, username);
- *  2. Anywhere a request needs a token, use UserContext.getInstance().getToken().
- *  3. On logout (if you implement it), call UserContext.getInstance().clear().
+ * Holds the logged-in user's session state (token + identity) plus the client's
+ * UI preferences (dark mode). Populated by LoginController after a successful
+ * login and read by the rest of the controllers.
  */
 public class UserContext {
 
@@ -22,6 +12,10 @@ public class UserContext {
     private String token;
     private int userId;
     private String username;
+    private String displayName;
+    private String avatarUrl;
+
+    private boolean darkMode = false;
 
     private UserContext() {
     }
@@ -30,16 +24,20 @@ public class UserContext {
         return INSTANCE;
     }
 
-    public void setSession(String token, int userId, String username) {
+    public void setSession(String token, int userId, String username, String displayName, String avatarUrl) {
         this.token = token;
         this.userId = userId;
         this.username = username;
+        this.displayName = displayName;
+        this.avatarUrl = avatarUrl;
     }
 
     public void clear() {
         this.token = null;
         this.userId = 0;
         this.username = null;
+        this.displayName = null;
+        this.avatarUrl = null;
     }
 
     public boolean isLoggedIn() {
@@ -56,5 +54,33 @@ public class UserContext {
 
     public String getUsername() {
         return username;
+    }
+
+    public String getDisplayName() {
+        return (displayName == null || displayName.isBlank()) ? username : displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
+    public boolean isDarkMode() {
+        return darkMode;
+    }
+
+    public void setDarkMode(boolean darkMode) {
+        this.darkMode = darkMode;
+    }
+
+    public void toggleDarkMode() {
+        this.darkMode = !this.darkMode;
     }
 }
