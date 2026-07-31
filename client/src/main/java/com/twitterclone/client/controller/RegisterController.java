@@ -1,5 +1,11 @@
 package com.twitterclone.client.controller;
 
+import com.google.gson.JsonObject;
+import com.twitterclone.client.network.NetworkService;
+import com.twitterclone.client.network.UserContext;
+import com.twitterclone.client.util.SceneNavigator;
+import com.twitterclone.shared.protocol.Packet;
+import com.twitterclone.shared.protocol.PacketType;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -11,6 +17,10 @@ import javafx.scene.control.TextField;
  * Owner: Faraz (Frontend) | Phase 1 - Day 3-5
  * ============================================================
  * Controller for Register.fxml. Structure is nearly identical to LoginController.
+ *
+ * Team decision: after a successful REGISTER, immediately fire a LOGIN with
+ * the same credentials so the user lands straight on the Dashboard instead
+ * of being sent back to the Login screen.
  */
 public class RegisterController {
 
@@ -32,25 +42,55 @@ public class RegisterController {
     @FXML
     private Button goToLoginButton;
 
-    /**
-     * TODO(Faraz):
-     *  1. Basic validation (fields not empty, simple email format, password length).
-     *  2. payload = {"username":..., "email":..., "password":...}
-     *  3. Send Packet.request(PacketType.REGISTER, null, payload).
-     *  4. In the callback: if OK -> route the user to Login.fxml (or log them
-     *     in directly - team decision; the spec only says the user should be
-     *     routed to the main page after registering, so it's likely you'll
-     *     automatically fire a LOGIN too after a successful REGISTER).
-     *     If ERROR (e.g. duplicate username) -> populate statusLabel.
-     */
     @FXML
     private void onRegisterButtonClick() {
-        // TODO(Faraz): full implementation per the guide above.
+        String username = usernameField.getText();
+        String email = emailField.getText();
+        String password = passwordField.getText();
+
+        if (username == null || username.isBlank()
+                || email == null || !email.contains("@")
+                || password == null || password.length() < 6) {
+            statusLabel.setText("Fill in a username, a valid email, and a password of 6+ characters.");
+            return;
+        }
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("username", username);
+        payload.addProperty("email", email);
+        payload.addProperty("password", password);
+
+        registerButton.setDisable(true);
+        NetworkService.getInstance().sendRequest(Packet.request(PacketType.REGISTER, null, payload), response -> {
+            if (!"OK".equals(response.getStatus())) {
+                registerButton.setDisable(false);
+                statusLabel.setText(response.getMessage() != null ? response.getMessage() : "Registration failed.");
+                return;
+            }
+            loginAfterRegister(username, password);
+        });
     }
 
-    /** TODO(Faraz): return the scene to Login.fxml (same FXMLLoader pattern). */
+    private void loginAfterRegister(String username, String password) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("username", username);
+        payload.addProperty("password", password);
+
+        NetworkService.getInstance().sendRequest(Packet.request(PacketType.LOGIN, null, payload), response -> {
+            registerButton.setDisable(false);
+            if ("OK".equals(response.getStatus())) {
+                int userId = response.getPayload().get("userId").getAsInt();
+                UserContext.getInstance().setSession(response.getToken(), userId, username);
+                SceneNavigator.switchScene(registerButton, "/fxml/Dashboard.fxml");
+            } else {
+                // Registered fine but the follow-up auto-login failed; send them to Login manually.
+                SceneNavigator.switchScene(registerButton, "/fxml/Login.fxml");
+            }
+        });
+    }
+
     @FXML
     private void onGoToLoginClick() {
-        // TODO(Faraz): full implementation per the guide above.
+        SceneNavigator.switchScene(goToLoginButton, "/fxml/Login.fxml");
     }
 }

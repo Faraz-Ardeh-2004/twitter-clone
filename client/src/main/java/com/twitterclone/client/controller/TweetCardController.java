@@ -7,8 +7,16 @@ import com.twitterclone.shared.model.Tweet;
 import com.twitterclone.shared.protocol.Packet;
 import com.twitterclone.shared.protocol.PacketType;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextInputDialog;
+import javafx.scene.input.MouseEvent;
+import javafx.stage.Stage;
+
+import java.io.IOException;
 
 /**
  * ============================================================
@@ -36,46 +44,78 @@ public class TweetCardController {
 
     private Tweet tweet;
 
-    /**
-     * TODO(Faraz - Phase 2): DashboardController calls this method right
-     * after building the card. Populate authorLabel/timestampLabel/contentLabel
-     * from tweet, and also set
-     * likeButton.setText("Like (" + tweet.getLikeCount() + ")").
-     */
     public void setTweet(Tweet tweet) {
         this.tweet = tweet;
-        // TODO(Faraz): full implementation per the guide above.
+        authorLabel.setText("@" + tweet.getAuthorUsername());
+        timestampLabel.setText(tweet.getCreatedAt());
+        contentLabel.setText(tweet.getContent());
+        likeButton.setText("Like (" + tweet.getLikeCount() + ")");
     }
 
-    /**
-     * TODO(Faraz - Phase 3): per the spec - "on click, a like packet is sent
-     * to the server and the like count optimistically goes up by one" (i.e.
-     * optimistic UI update - don't wait for the server's response, bump the
-     * number locally right away).
-     * Packet: Packet.request(PacketType.LIKE_TWEET, token, {"tweetId": tweet.getId()})
-     */
+    /** Optimistic UI: the like count bumps locally right away, before the server confirms. */
     @FXML
     private void onLikeButtonClick() {
-        // TODO(Faraz): full implementation per the guide above.
+        tweet.setLikeCount(tweet.getLikeCount() + 1);
+        likeButton.setText("Like (" + tweet.getLikeCount() + ")");
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("tweetId", tweet.getId());
+        NetworkService.getInstance().sendRequest(
+                Packet.request(PacketType.LIKE_TWEET, UserContext.getInstance().getToken(), payload),
+                response -> {
+                    if (!"OK".equals(response.getStatus())) {
+                        // revert the optimistic bump if the server rejected the like
+                        tweet.setLikeCount(tweet.getLikeCount() - 1);
+                        likeButton.setText("Like (" + tweet.getLikeCount() + ")");
+                    }
+                });
     }
 
-    /**
-     * TODO(Faraz - Phase 3): send a CREATE_TWEET packet with parentTweetId
-     * filled in (after getting the reply text from the user - you can use a
-     * simple JavaFX TextInputDialog, no separate fxml needed).
-     */
     @FXML
     private void onReplyButtonClick() {
-        // TODO(Faraz): full implementation per the guide above.
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Reply");
+        dialog.setHeaderText("Replying to @" + tweet.getAuthorUsername());
+        dialog.setContentText("Your reply:");
+
+        dialog.showAndWait().ifPresent(replyContent -> {
+            if (replyContent.isBlank()) {
+                return;
+            }
+            JsonObject payload = new JsonObject();
+            payload.addProperty("content", replyContent);
+            payload.addProperty("parentTweetId", tweet.getId());
+            NetworkService.getInstance().sendRequest(
+                    Packet.request(PacketType.CREATE_TWEET, UserContext.getInstance().getToken(), payload),
+                    response -> {
+                        // the reply shows up in the parent tweet's detail page on next open;
+                        // nothing to update in this card.
+                    });
+        });
     }
 
     /**
-     * TODO(Faraz - Phase 3): clicking the card itself (not the buttons)
-     * should take the user to TweetDetail.fxml (per the spec: "simplest
-     * possible version... remove the complex tree structure"). You can add
-     * an onMouseClicked to the main VBox in the fxml that calls this method.
+     * Wired from TweetCard.fxml's root VBox via onMouseClicked. Mouse events
+     * bubble up from the Like/Reply buttons too, so ignore clicks that
+     * originated on a Button - otherwise pressing Like would also navigate
+     * to the detail page.
      */
-    private void onCardClicked() {
-        // TODO(Faraz): full implementation in Phase 3.
+    @FXML
+    private void onCardClicked(MouseEvent event) {
+        if (event.getTarget() instanceof Button) {
+            return;
+        }
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/TweetDetail.fxml"));
+            Parent root = loader.load();
+            TweetDetailController controller = loader.getController();
+            controller.loadTweet(tweet);
+
+            Stage stage = (Stage) contentLabel.getScene().getWindow();
+            Scene currentScene = contentLabel.getScene();
+            stage.setScene(new Scene(root, currentScene.getWidth(), currentScene.getHeight()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

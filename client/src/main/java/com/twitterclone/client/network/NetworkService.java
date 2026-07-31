@@ -87,12 +87,11 @@ public class NetworkService {
     /**
      * Sends a request to the server and registers a callback for when the
      * response of the same type arrives.
-     *
-     * TODO(Faraz): before sending, if request.getToken() == null and
-     * UserContext has a valid token, set it (for requests that require login):
-     *   request.setToken(UserContext.getInstance().getToken());
      */
     public void sendRequest(Packet request, Consumer<Packet> onResponse) {
+        if (request.getToken() == null && UserContext.getInstance().isLoggedIn()) {
+            request.setToken(UserContext.getInstance().getToken());
+        }
         pendingCallbacks.put(request.getType(), onResponse);
         out.println(gson.toJson(request));
     }

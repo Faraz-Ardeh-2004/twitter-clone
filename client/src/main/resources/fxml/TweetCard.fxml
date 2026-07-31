@@ -16,7 +16,8 @@ per tweet in the feed), so there should be no global logic in here.
 
 <VBox spacing="6.0" style="-fx-border-color: #d0d0d0; -fx-border-radius: 6; -fx-background-radius: 6;"
       xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-      fx:controller="com.twitterclone.client.controller.TweetCardController">
+      fx:controller="com.twitterclone.client.controller.TweetCardController"
+      onMouseClicked="#onCardClicked">
     <padding>
         <Insets top="10" right="12" bottom="10" left="12"/>
     </padding>
