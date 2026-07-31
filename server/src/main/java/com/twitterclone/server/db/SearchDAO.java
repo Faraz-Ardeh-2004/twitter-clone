@@ -1,73 +1,47 @@
 package com.twitterclone.server.db;
 
-import com.twitterclone.shared.model.Tweet;
 import com.twitterclone.shared.model.User;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Simple search using ILIKE (case-insensitive pattern matching in Postgres).
- * Fine for this project's data volume - if search gets slow later, pg_trgm
- * indexes are the next step (see the commented-out section in schema.sql).
+ * User search using ILIKE (case-insensitive). Matches on username OR display
+ * name, and annotates each result with the viewer's follow state and the
+ * user's follower count. Tweet/hashtag search lives in TweetDAO so results
+ * share the same viewer-aware shape (liked/retweeted flags, counts).
  */
 public class SearchDAO {
 
-    /** Finds users whose username contains the query string (case-insensitive). */
-    public List<User> searchUsers(String query) throws SQLException {
-        String sql = "SELECT id, username, email, password_hash FROM users " +
-                "WHERE username ILIKE ? ORDER BY username ASC";
+    public List<User> searchUsers(String query, int viewerId) throws SQLException {
+        String sql = "SELECT u.id, u.username, u.display_name, u.avatar_url, u.bio, u.verified, " +
+                "  (SELECT COUNT(*) FROM follows f WHERE f.following_id = u.id) AS followers, " +
+                "  EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.following_id = u.id) AS is_following " +
+                "FROM users u " +
+                "WHERE u.username ILIKE ? OR u.display_name ILIKE ? " +
+                "ORDER BY followers DESC, u.username ASC LIMIT 100";
         List<User> results = new ArrayList<>();
         try (Connection conn = DatabaseConnection.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, "%" + query + "%");
+            stmt.setInt(1, viewerId);
+            stmt.setString(2, "%" + query + "%");
+            stmt.setString(3, "%" + query + "%");
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     User u = new User();
                     u.setId(rs.getInt("id"));
                     u.setUsername(rs.getString("username"));
-                    u.setEmail(rs.getString("email"));
-                    u.setPasswordHash(rs.getString("password_hash"));
+                    u.setDisplayName(rs.getString("display_name"));
+                    u.setAvatarUrl(rs.getString("avatar_url"));
+                    u.setBio(rs.getString("bio"));
+                    u.setVerified(rs.getBoolean("verified"));
+                    u.setFollowerCount(rs.getInt("followers"));
+                    u.setFollowing(rs.getBoolean("is_following"));
                     results.add(u);
-                }
-            }
-        }
-        return results;
-    }
-
-    /** Finds tweets whose content contains the query string, newest first. */
-    public List<Tweet> searchTweets(String query) throws SQLException {
-        String sql = "SELECT t.id, t.author_id, t.content, t.created_at, t.parent_tweet_id, " +
-                "       u.username AS author_username, " +
-                "       (SELECT COUNT(*) FROM likes l WHERE l.tweet_id = t.id) AS like_count " +
-                "FROM tweets t JOIN users u ON t.author_id = u.id " +
-                "WHERE t.content ILIKE ? " +
-                "ORDER BY t.created_at DESC";
-        List<Tweet> results = new ArrayList<>();
-        try (Connection conn = DatabaseConnection.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, "%" + query + "%");
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    Tweet t = new Tweet();
-                    t.setId(rs.getInt("id"));
-                    t.setAuthorId(rs.getInt("author_id"));
-                    t.setAuthorUsername(rs.getString("author_username"));
-                    t.setContent(rs.getString("content"));
-
-                    Timestamp createdAt = rs.getTimestamp("created_at");
-                    t.setCreatedAt(createdAt.toLocalDateTime().toString());
-
-                    int parentId = rs.getInt("parent_tweet_id");
-                    t.setParentTweetId(rs.wasNull() ? null : parentId);
-
-                    t.setLikeCount(rs.getInt("like_count"));
-                    results.add(t);
                 }
             }
         }

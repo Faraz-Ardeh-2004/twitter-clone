@@ -1,11 +1,13 @@
 package com.twitterclone.server;
 
 import com.twitterclone.server.db.DatabaseConnection;
+import com.twitterclone.server.db.SchemaInitializer;
 import com.twitterclone.server.network.ClientHandler;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.Connection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,39 +37,30 @@ public class ServerMain {
     public static void main(String[] args) {
         System.out.println("Twitter-clone server starting on port " + PORT + " ...");
 
-        // TODO(Hesam): before accepting connections, make sure the database
-        // is reachable. You can run a quick test here:
-        // DatabaseConnection.getInstance().getConnection() and if it throws,
-        // stop the server with a clear message (fail-fast is better than a
-        // crash later).
-        // Example:
-        //   try (var conn = DatabaseConnection.getInstance().getConnection()) {
-        //       System.out.println("Database connection OK");
-        //   } catch (Exception e) {
-        //       System.err.println("Cannot connect to database: " + e.getMessage());
-        //       return;
-        //   }
+        // Fail fast if the database is unreachable, and ensure the schema exists.
+        try (Connection conn = DatabaseConnection.getInstance().getConnection()) {
+            System.out.println("Database connection OK (" + conn.getMetaData().getURL() + ")");
+            SchemaInitializer.initialize();
+            System.out.println("Schema verified / initialized.");
+        } catch (Exception e) {
+            System.err.println("FATAL: cannot connect to or initialize the database: " + e.getMessage());
+            System.err.println("Check DB_URL / DB_USER / DB_PASSWORD and that PostgreSQL is running.");
+            return;
+        }
 
         ExecutorService threadPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("Server is listening...");
+            System.out.println("Server is listening on port " + PORT + " ...");
 
-            // TODO(Hesam): this is the server's main loop. For every new connection:
-            //   1. serverSocket.accept() returns a new Socket (blocks until a client connects)
-            //   2. create a new ClientHandler with that Socket
-            //   3. run it with threadPool.execute(handler) (not a manually created
-            //      thread; use the pool)
+            // Main accept loop: one ClientHandler per connection, each run on a
+            // pooled thread so many clients are served concurrently.
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("New client connected: " + clientSocket.getInetAddress());
-
-                ClientHandler handler = new ClientHandler(clientSocket);
-                threadPool.execute(handler);
+                threadPool.execute(new ClientHandler(clientSocket));
             }
-
         } catch (IOException e) {
-            // TODO(Hesam): better logging (e.g. via java.util.logging), and retry if needed.
             System.err.println("Server socket error: " + e.getMessage());
         } finally {
             threadPool.shutdown();

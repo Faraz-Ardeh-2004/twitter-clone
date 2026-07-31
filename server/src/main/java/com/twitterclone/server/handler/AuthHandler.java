@@ -6,6 +6,7 @@ import com.twitterclone.server.db.PasswordUtil;
 import com.twitterclone.server.db.UserDAO;
 import com.twitterclone.server.network.ClientHandler;
 import com.twitterclone.server.network.ConnectionRegistry;
+import com.twitterclone.server.util.Json;
 import com.twitterclone.shared.model.User;
 import com.twitterclone.shared.protocol.Packet;
 import com.twitterclone.shared.protocol.PacketType;
@@ -13,17 +14,9 @@ import com.twitterclone.shared.protocol.PacketType;
 import java.sql.SQLException;
 
 /**
- * ============================================================
- * Owner: Hesam (Backend) | Phase 1 - Day 3-5
- * ============================================================
- * Business logic for REGISTER / LOGIN / LOGOUT. This class is the bridge
- * between Dispatcher and UserDAO/Authenticator. There should be no raw SQL
- * here (that's UserDAO's job).
- *
- * Expected payload shape for each request (coordinate with Faraz):
- *   REGISTER -> { "username": "...", "email": "...", "password": "..." }
- *   LOGIN    -> { "username": "...", "password": "..." }
- *   LOGOUT   -> {} (the token is read from packet.getToken() itself)
+ * Business logic for REGISTER / LOGIN / LOGOUT. Bridges Dispatcher and
+ * UserDAO/Authenticator; contains no raw SQL. The server is the source of
+ * truth for validation, independent of any client-side checks.
  */
 public class AuthHandler {
 
@@ -32,57 +25,116 @@ public class AuthHandler {
     private AuthHandler() {
     }
 
-    /**
-     * TODO(Hesam):
-     *  1. Read username/email/password from request.getPayload().
-     *  2. Basic validation (not empty, password length) - you can validate on
-     *     both the client (Faraz) and here (server, the real source of truth).
-     *  3. Build a new User, hash the password with PasswordUtil.hash(...).
-     *  4. Call userDAO.insertUser(user); if it throws SQLException due to a
-     *     UNIQUE constraint (duplicate username/email), return a Packet.error.
-     *  5. On success return Packet.ok(PacketType.REGISTER, payload) (the
-     *     payload can include the new user's id).
-     */
     public static Packet handleRegister(Packet request) {
         JsonObject payload = request.getPayload();
         if (payload == null) {
             return Packet.error(PacketType.REGISTER, "Missing payload");
         }
+        String username = trim(Json.getString(payload, "username"));
+        String email = trim(Json.getString(payload, "email"));
+        String password = Json.getString(payload, "password");
 
-        // TODO(Hesam): full implementation per the guide above.
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleRegister in Phase 1");
+        String validation = validateRegistration(username, email, password);
+        if (validation != null) {
+            return Packet.error(PacketType.REGISTER, validation);
+        }
+
+        try {
+            if (userDAO.usernameExists(username)) {
+                return Packet.error(PacketType.REGISTER, "Username is already taken");
+            }
+            if (userDAO.emailExists(email)) {
+                return Packet.error(PacketType.REGISTER, "Email is already registered");
+            }
+            User user = new User();
+            user.setUsername(username);
+            user.setEmail(email);
+            user.setPasswordHash(PasswordUtil.hash(password));
+            userDAO.insertUser(user);
+
+            JsonObject out = new JsonObject();
+            out.addProperty("userId", user.getId());
+            out.addProperty("username", user.getUsername());
+            return Packet.ok(PacketType.REGISTER, out);
+        } catch (SQLException e) {
+            // Unique-constraint race or other DB error.
+            if (isUniqueViolation(e)) {
+                return Packet.error(PacketType.REGISTER, "Username or email is already in use");
+            }
+            System.err.println("Register failed: " + e.getMessage());
+            return Packet.error(PacketType.REGISTER, "Registration failed, please try again");
+        }
     }
 
-    /**
-     * TODO(Hesam):
-     *  1. Read username/password from the payload.
-     *  2. Call userDAO.getUserByUsername(username); if null -> error "user not found".
-     *  3. Check PasswordUtil.check(password, user.getPasswordHash()); if false -> error "wrong password".
-     *  4. If everything is correct: call Authenticator.createSession(user.getId()) to get a token.
-     *  5. Call handler.setUserId(user.getId()) and
-     *     ConnectionRegistry.register(user.getId(), handler) (these two lines
-     *     are exactly what Phase 2 - real-time - depends on).
-     *  6. Return the response Packet with the token filled in (Packet.ok
-     *     doesn't include a token; build a new Packet(...) directly, or set
-     *     the token field after building it).
-     */
     public static Packet handleLogin(Packet request, ClientHandler handler) {
         JsonObject payload = request.getPayload();
         if (payload == null) {
             return Packet.error(PacketType.LOGIN, "Missing payload");
         }
+        String username = trim(Json.getString(payload, "username"));
+        String password = Json.getString(payload, "password");
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            return Packet.error(PacketType.LOGIN, "Username and password are required");
+        }
 
-        // TODO(Hesam): full implementation per the guide above.
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleLogin in Phase 1");
+        try {
+            User user = userDAO.getUserByUsername(username);
+            if (user == null || !PasswordUtil.check(password, user.getPasswordHash())) {
+                return Packet.error(PacketType.LOGIN, "Invalid username or password");
+            }
+
+            String token = Authenticator.createSession(user.getId());
+            handler.setUserId(user.getId());
+            ConnectionRegistry.register(user.getId(), handler);
+
+            JsonObject out = new JsonObject();
+            out.addProperty("userId", user.getId());
+            out.addProperty("username", user.getUsername());
+            out.addProperty("displayName", user.displayNameOrUsername());
+            if (user.getAvatarUrl() != null) {
+                out.addProperty("avatarUrl", user.getAvatarUrl());
+            }
+            Packet resp = Packet.ok(PacketType.LOGIN, out);
+            resp.setToken(token);
+            return resp;
+        } catch (SQLException e) {
+            System.err.println("Login failed: " + e.getMessage());
+            return Packet.error(PacketType.LOGIN, "Login failed, please try again");
+        }
     }
 
-    /**
-     * TODO(Hesam):
-     *  1. Authenticator.invalidate(request.getToken())
-     *  2. If handler.getUserId() != null, also call ConnectionRegistry.unregister(...).
-     */
     public static Packet handleLogout(Packet request, ClientHandler handler) {
-        // TODO(Hesam): full implementation per the guide above.
-        throw new UnsupportedOperationException("TODO(Hesam): implement handleLogout in Phase 1");
+        Authenticator.invalidate(request.getToken());
+        if (handler.getUserId() != null) {
+            ConnectionRegistry.unregister(handler.getUserId());
+            handler.setUserId(null);
+        }
+        return Packet.ok(PacketType.LOGOUT, null);
+    }
+
+    // --- validation helpers ---
+
+    private static String validateRegistration(String username, String email, String password) {
+        if (username == null || username.length() < 3 || username.length() > 50) {
+            return "Username must be 3–50 characters";
+        }
+        if (!username.matches("[A-Za-z0-9_]+")) {
+            return "Username may only contain letters, digits, and underscores";
+        }
+        if (email == null || !email.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")) {
+            return "A valid email address is required";
+        }
+        if (password == null || password.length() < 6) {
+            return "Password must be at least 6 characters";
+        }
+        return null;
+    }
+
+    private static boolean isUniqueViolation(SQLException e) {
+        return "23505".equals(e.getSQLState());
+    }
+
+    private static String trim(String s) {
+        return s == null ? null : s.trim();
     }
 }

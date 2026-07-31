@@ -7,6 +7,7 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+// Theme is in the same package (com.twitterclone.client.util); no import needed.
 
 /**
  * ============================================================
@@ -27,7 +28,9 @@ public final class SceneNavigator {
             Parent root = loader.load();
             Stage stage = (Stage) from.getScene().getWindow();
             Scene currentScene = from.getScene();
-            stage.setScene(new Scene(root, currentScene.getWidth(), currentScene.getHeight()));
+            Scene next = new Scene(root, currentScene.getWidth(), currentScene.getHeight());
+            Theme.apply(next);
+            stage.setScene(next);
         } catch (IOException e) {
             throw new RuntimeException("Failed to load fxml: " + fxmlPath, e);
         }

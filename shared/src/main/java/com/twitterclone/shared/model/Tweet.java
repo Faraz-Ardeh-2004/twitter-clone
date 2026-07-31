@@ -1,33 +1,51 @@
 package com.twitterclone.shared.model;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * ============================================================
- * Primary owner: AmirAli (Database) | Phase 2 - Day 6-8
- * (Faraz uses this same class to render a TweetCard on the client)
+ * Shared tweet model (POJO). Save/read logic lives in TweetDAO.
  * ============================================================
- * Simple POJO for a tweet. Save/read logic lives in TweetDAO.
+ * A single Tweet instance may represent a plain tweet, a reply
+ * (parentTweetId set), or — as it appears in a feed — a retweet. For a retweet
+ * the row is "flattened" for display: the id/author/content fields hold the
+ * ORIGINAL tweet's data (so liking/replying targets the original), while
+ * retweetOf and retweetedBy mark that this feed entry is a repost.
  *
- * TODO(AmirAli): in Phase 3, add the parentTweetId field (for replies).
- * TODO(AmirAli): for every tweet returned from GET_FEED, also populate
- *   authorUsername and likeCount (these come from a JOIN with
- *   users/likes, not from the tweets table itself; that's why they're kept
- *   separate from id/content here).
+ * The aggregate fields (likeCount, replyCount, retweetCount) and the
+ * per-viewer flags (liked, retweeted) are computed by TweetDAO at query time.
  */
 public class Tweet {
 
     private int id;
     private int authorId;
-    private String authorUsername; // result of a JOIN with the users table - for direct UI display
+    private String authorUsername;      // from JOIN with users
+    private String authorDisplayName;   // from JOIN with users
+    private String authorAvatarUrl;     // from JOIN with users
     private String content;
-    private String createdAt; // ISO-8601 string; simpler than serializing java.time directly
+    private String createdAt;           // ISO-8601 string
 
-    // TODO(AmirAli - Phase 3): use/enable this field once you add the
-    // parent_tweet_id column to the tweets table. Leave it null if the tweet
-    // is not a reply.
-    private Integer parentTweetId;
+    private Integer parentTweetId;      // non-null when this tweet is a reply
 
-    // TODO(AmirAli - Phase 3): populate the like count via a JOIN with the likes table.
+    // --- retweet metadata (populated when this feed entry is a repost) ---
+    private Integer retweetOf;          // original tweet id
+    private String retweetedBy;         // username of the account that reposted
+
+    // --- media ---
+    private List<String> media = new ArrayList<>(); // base64 data URIs
+
+    // --- hashtags parsed from content ---
+    private List<String> hashtags = new ArrayList<>();
+
+    // --- aggregate counts ---
     private int likeCount;
+    private int replyCount;
+    private int retweetCount;
+
+    // --- per-viewer flags (relative to the requesting user) ---
+    private boolean liked;
+    private boolean retweeted;
 
     public Tweet() {
     }
@@ -64,6 +82,22 @@ public class Tweet {
         this.authorUsername = authorUsername;
     }
 
+    public String getAuthorDisplayName() {
+        return authorDisplayName;
+    }
+
+    public void setAuthorDisplayName(String authorDisplayName) {
+        this.authorDisplayName = authorDisplayName;
+    }
+
+    public String getAuthorAvatarUrl() {
+        return authorAvatarUrl;
+    }
+
+    public void setAuthorAvatarUrl(String authorAvatarUrl) {
+        this.authorAvatarUrl = authorAvatarUrl;
+    }
+
     public String getContent() {
         return content;
     }
@@ -88,11 +122,75 @@ public class Tweet {
         this.parentTweetId = parentTweetId;
     }
 
+    public Integer getRetweetOf() {
+        return retweetOf;
+    }
+
+    public void setRetweetOf(Integer retweetOf) {
+        this.retweetOf = retweetOf;
+    }
+
+    public String getRetweetedBy() {
+        return retweetedBy;
+    }
+
+    public void setRetweetedBy(String retweetedBy) {
+        this.retweetedBy = retweetedBy;
+    }
+
+    public List<String> getMedia() {
+        return media;
+    }
+
+    public void setMedia(List<String> media) {
+        this.media = (media == null) ? new ArrayList<>() : media;
+    }
+
+    public List<String> getHashtags() {
+        return hashtags;
+    }
+
+    public void setHashtags(List<String> hashtags) {
+        this.hashtags = (hashtags == null) ? new ArrayList<>() : hashtags;
+    }
+
     public int getLikeCount() {
         return likeCount;
     }
 
     public void setLikeCount(int likeCount) {
         this.likeCount = likeCount;
+    }
+
+    public int getReplyCount() {
+        return replyCount;
+    }
+
+    public void setReplyCount(int replyCount) {
+        this.replyCount = replyCount;
+    }
+
+    public int getRetweetCount() {
+        return retweetCount;
+    }
+
+    public void setRetweetCount(int retweetCount) {
+        this.retweetCount = retweetCount;
+    }
+
+    public boolean isLiked() {
+        return liked;
+    }
+
+    public void setLiked(boolean liked) {
+        this.liked = liked;
+    }
+
+    public boolean isRetweeted() {
+        return retweeted;
+    }
+
+    public void setRetweeted(boolean retweeted) {
+        this.retweeted = retweeted;
     }
 }

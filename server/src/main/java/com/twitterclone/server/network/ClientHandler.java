@@ -63,9 +63,11 @@ public class ClientHandler implements Runnable {
         } catch (IOException e) {
             System.out.println("Client disconnected: " + e.getMessage());
         } finally {
-            // TODO(Hesam - Phase 2): if the user was logged in, remove them
-            // from ConnectionRegistry so no one tries to push to a closed socket:
-            //   if (userId != null) ConnectionRegistry.unregister(userId);
+            // If the user was logged in, remove them from the registry so no one
+            // tries to push to a closed socket.
+            if (userId != null) {
+                ConnectionRegistry.unregister(userId);
+            }
             closeQuietly();
         }
     }
@@ -83,16 +85,19 @@ public class ClientHandler implements Runnable {
             return Packet.error(PacketType.ERROR, "Missing 'type' field");
         }
 
-        // Minimal example for Phase 0: PING/PONG test without needing the full Dispatcher.
-        // TODO(Hesam): once Dispatcher is written, remove this if-block and route
-        // everything (including PING) through Dispatcher.dispatch(this, request).
-        if (PacketType.PING.name().equals(request.getType())) {
-            return Packet.ok(PacketType.PONG, null);
+        Packet response;
+        try {
+            response = Dispatcher.dispatch(this, request);
+        } catch (RuntimeException e) {
+            // A handler bug must never take down this client's thread.
+            System.err.println("Dispatch error for " + request.getType() + ": " + e);
+            response = Packet.error(PacketType.ERROR, "Server error handling " + request.getType());
         }
-
-        // TODO(Hesam): replace this line with the real Dispatcher call:
-        //   return Dispatcher.dispatch(this, request);
-        return Packet.error(PacketType.ERROR, "No dispatcher wired yet for type: " + request.getType());
+        // Echo the requestId so the client can match this response to its request.
+        if (response != null) {
+            response.setRequestId(request.getRequestId());
+        }
+        return response;
     }
 
     /** Sends a packet (response or push) to this specific client. Not thread-safe across callers; only one thread should call this per handler. */
