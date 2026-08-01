@@ -441,6 +441,8 @@ rather than the whole system. Concretely, it was used to help with:
   updates and keeping client and server state in sync.
 - **Fixing errors** — in most places where an exception was thrown or the project
   would not compile, we used AI to help identify and resolve the problem.
+- **documentation** — writing report.md and readme.md
+  
 
 ### Examples of tasks where AI assisted
 
