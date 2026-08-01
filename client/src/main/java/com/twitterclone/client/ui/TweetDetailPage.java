@@ -40,8 +40,11 @@ public class TweetDetailPage {
 
         Label title = new Label("Tweet");
         title.getStyleClass().add("title");
-        Button back = new Button("← Back");
+        Button back = new Button("Back");
         back.getStyleClass().add("action-button");
+        back.setGraphic(Icons.create("arrow-left", 18, "icon-default"));
+        back.setGraphicTextGap(6);
+        back.setContentDisplay(javafx.scene.control.ContentDisplay.LEFT);
         back.setOnAction(e -> navigator.openHome());
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);

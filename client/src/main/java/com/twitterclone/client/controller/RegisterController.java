@@ -45,6 +45,15 @@ public class RegisterController {
     private Button goToLoginButton;
 
     @FXML
+    private Label brandLabel;
+
+    @FXML
+    public void initialize() {
+        brandLabel.setGraphic(com.twitterclone.client.ui.Icons.create("bird", 26, "icon-accent"));
+        brandLabel.setGraphicTextGap(8);
+    }
+
+    @FXML
     private void onRegisterButtonClick() {
         String username = usernameField.getText();
         String email = emailField.getText();

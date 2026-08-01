@@ -117,9 +117,32 @@
 .tweet-card:hover { -fx-background-color: -fx-hover; }
 .tweet-author { -fx-font-weight: bold; -fx-text-fill: -fx-text; }
 .tweet-handle, .tweet-time { -fx-text-fill: -fx-text-muted; }
-.tweet-content { -fx-text-fill: -fx-text; -fx-font-size: 14px; }
+/* tweet body + hashtags are JavaFX Text nodes: their colour is -fx-fill,
+   not -fx-text-fill (Text ignores the latter). Both are set so the same
+   classes also work if applied to a Label. */
+.tweet-content { -fx-fill: -fx-text; -fx-text-fill: -fx-text; -fx-font-size: 14px; }
 .tweet-context { -fx-text-fill: -fx-text-muted; -fx-font-size: 12px; }
-.hashtag { -fx-text-fill: -fx-accent-color; }
+.hashtag {
+    -fx-fill: -fx-accent-color;
+    -fx-text-fill: -fx-accent-color;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+
+/* ---- Lucide icons (stroke-based, theme-aware) ---- */
+.lucide-icon {
+    -fx-fill: transparent;
+    -fx-stroke-width: 2;
+    -fx-stroke-line-cap: round;
+    -fx-stroke-line-join: round;
+}
+.icon-default  { -fx-stroke: -fx-text; }
+.icon-muted    { -fx-stroke: -fx-text-muted; }
+.icon-accent   { -fx-stroke: -fx-accent-color; }
+.icon-white    { -fx-stroke: white; }
+.icon-like     { -fx-stroke: #f91880; -fx-fill: #f91880; }
+.icon-retweet  { -fx-stroke: #00ba7c; }
+.icon-danger   { -fx-stroke: #f4212e; }
 
 /* ---- avatar circle ---- */
 .avatar {

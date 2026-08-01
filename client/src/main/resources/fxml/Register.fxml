@@ -14,7 +14,7 @@
            fx:controller="com.twitterclone.client.controller.RegisterController">
     <VBox alignment="CENTER" spacing="14.0" maxWidth="340" styleClass="auth-card">
 
-        <Label text="🐦 Create your account" styleClass="title"/>
+        <Label fx:id="brandLabel" text="Create your account" styleClass="title"/>
 
         <TextField fx:id="usernameField" promptText="Username"/>
         <TextField fx:id="emailField" promptText="Email"/>

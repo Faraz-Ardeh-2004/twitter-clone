@@ -11,6 +11,7 @@ import com.twitterclone.shared.protocol.Protocol;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.image.Image;
@@ -64,8 +65,11 @@ public class Composer extends VBox {
         postButton.setDisable(true);
         postButton.setOnAction(e -> submit());
 
-        Button attach = new Button("🖼 Image");
+        Button attach = new Button("Image");
         attach.getStyleClass().add("btn-outline");
+        attach.setGraphic(Icons.create("image", 16, "icon-accent"));
+        attach.setGraphicTextGap(6);
+        attach.setContentDisplay(ContentDisplay.LEFT);
         attach.setOnAction(e -> attachImage());
 
         counter.getStyleClass().add("text-muted");
@@ -128,8 +132,10 @@ public class Composer extends VBox {
         view.setFitWidth(72);
         view.setFitHeight(72);
         view.setPreserveRatio(true);
-        Button remove = new Button("✕");
+        Button remove = new Button();
         remove.getStyleClass().add("action-button");
+        remove.setGraphic(Icons.create("x", 14, "icon-white"));
+        remove.setStyle("-fx-background-color: rgba(0,0,0,0.55); -fx-background-radius: 12; -fx-padding: 3;");
         StackPane cell = new StackPane(view, remove);
         StackPane.setAlignment(remove, Pos.TOP_RIGHT);
         remove.setOnAction(e -> {

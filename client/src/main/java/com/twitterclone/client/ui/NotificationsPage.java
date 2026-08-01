@@ -82,6 +82,7 @@ public class NotificationsPage {
             box.getStyleClass().add("notif-unread");
         }
 
+        Node typeIcon = Icons.create(iconFor(n.getType()), 22, colorFor(n.getType()));
         Node avatar = UiUtils.avatar(n.getActorUsername(), null, 40);
 
         VBox text = new VBox(2);
@@ -93,9 +94,7 @@ public class NotificationsPage {
         time.getStyleClass().add("tweet-time");
         text.getChildren().addAll(main, time);
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        box.getChildren().addAll(avatar, text);
+        box.getChildren().addAll(typeIcon, avatar, text);
 
         box.setStyle("-fx-cursor: hand;");
         box.setOnMouseClicked(e -> {
@@ -106,6 +105,27 @@ public class NotificationsPage {
             }
         });
         return box;
+    }
+
+    private String iconFor(String type) {
+        if (type == null) return "bell";
+        return switch (type) {
+            case "FOLLOW" -> "user-plus";
+            case "LIKE" -> "heart";
+            case "REPLY" -> "message-circle";
+            case "RETWEET" -> "repeat";
+            default -> "bell";
+        };
+    }
+
+    private String colorFor(String type) {
+        if (type == null) return "icon-muted";
+        return switch (type) {
+            case "LIKE" -> "icon-like";
+            case "RETWEET" -> "icon-retweet";
+            case "FOLLOW", "REPLY" -> "icon-accent";
+            default -> "icon-muted";
+        };
     }
 
     private void markRead() {

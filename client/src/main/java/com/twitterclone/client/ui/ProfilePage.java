@@ -112,6 +112,9 @@ public class ProfilePage {
         if (self) {
             Button edit = new Button("Edit profile");
             edit.getStyleClass().add("btn-outline");
+            edit.setGraphic(Icons.create("pencil", 15, "icon-accent"));
+            edit.setGraphicTextGap(6);
+            edit.setContentDisplay(javafx.scene.control.ContentDisplay.LEFT);
             edit.setOnAction(e -> EditProfileDialog.show(root.getScene() == null ? null : root.getScene().getWindow(),
                     profile, this::onProfileUpdated));
             actionRow.getChildren().add(edit);
@@ -130,9 +133,7 @@ public class ProfilePage {
         name.getStyleClass().add("title");
         nameRow.getChildren().add(name);
         if (profile.isVerified()) {
-            Label badge = new Label("✔");
-            badge.getStyleClass().add("verified");
-            nameRow.getChildren().add(badge);
+            nameRow.getChildren().add(Icons.create("badge-check", 20, "icon-accent"));
         }
         Label handle = new Label("@" + profile.getUsername());
         handle.getStyleClass().add("tweet-handle");
@@ -157,6 +158,10 @@ public class ProfilePage {
         avatarWrap.setPadding(new Insets(0, 0, 0, 16));
         avatarWrap.setAlignment(Pos.CENTER_LEFT);
         avatarWrap.setTranslateY(-30);
+        // The avatar is pulled up over the banner/action row; without this the
+        // full-width transparent wrapper would sit on top of the Follow / Edit
+        // button and swallow its clicks.
+        avatarWrap.setMouseTransparent(true);
 
         headerBox.getChildren().addAll(banner, actionRow, avatarWrap, identity, stats, thinSeparator());
     }
