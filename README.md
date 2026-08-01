@@ -1,218 +1,168 @@
-# 🐦 Twitter Clone — Advanced Programming Final Project
+# Twitter Clone
 
-A desktop social-network application inspired by **X (Twitter)**, built with a
-multi-threaded **client–server architecture** over Java sockets, a **JSON
-protocol** (Gson), **JavaFX** for the UI, and **PostgreSQL** (JDBC + BCrypt) for
-storage. Tweets, likes, follows, replies, retweets, and notifications are
-delivered to connected clients **in real time**.
+A desktop social network inspired by **X (Twitter)** — a multi-threaded
+client–server application written in **Java**, talking over raw **sockets** with
+a **JSON protocol**, backed by **PostgreSQL**, and presented through a themed
+**JavaFX** interface. New tweets, likes, follows, and notifications are pushed to
+connected clients **in real time**.
+
+> **Why this project?** It's the Advanced Programming final project: a single,
+> realistic system that exercises everything the course covers — object-oriented
+> design, concurrent socket servers, a hand-written JSON protocol, JDBC with
+> parameterized queries, and GUI development — instead of a set of disconnected
+> exercises. The result is portfolio-quality and interview-ready.
 
 ---
 
 ## Table of Contents
 
-1. [Description](#description)
-2. [Features](#features)
-3. [Architecture at a glance](#architecture-at-a-glance)
-4. [Tech stack](#tech-stack)
-5. [Project structure](#project-structure)
-6. [Getting started](#getting-started)
-   - [Prerequisites](#prerequisites)
-   - [Database setup](#database-setup)
-   - [Build](#build)
-   - [Run the server](#run-the-server)
-   - [Run the client](#run-the-client)
-7. [Usage guide](#usage-guide)
-8. [Demo / Visuals](#demo--visuals)
-9. [Configuration](#configuration)
-10. [Credits](#credits)
-11. [Changelog](#changelog)
-12. [Contact](#contact)
+- [Description](#description)
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Usage](#usage)
+  - [Prerequisites](#prerequisites)
+  - [1. Set up the database](#1-set-up-the-database)
+  - [2. Build](#2-build)
+  - [3. Run the server](#3-run-the-server)
+  - [4. Run the client(s)](#4-run-the-clients)
+  - [Configuration](#configuration)
+- [Demo / Visuals](#demo--visuals)
+- [Credits](#credits)
+- [Changelog](#changelog)
+- [Contact](#contact)
 
 ---
 
 ## Description
 
-This project is a fully functional social-media platform where users can
-register, publish tweets (with images and hashtags), follow each other, like and
-reply to tweets, retweet, search, and receive notifications. A central server
-manages all state in PostgreSQL and pushes updates to connected clients so the
-feed, likes, follows, and notifications update **without a manual refresh**.
+**What it does.** Users register and log in, publish tweets (with images and
+`#hashtags`), follow one another, like/reply/retweet, browse a personalized
+timeline, search people and content, and receive notifications. A central server
+owns all state in PostgreSQL; clients never touch the database directly — they
+exchange JSON messages with the server over a socket.
 
-The goal was to apply object-oriented design, socket programming, multithreading,
-JDBC with parameterized queries, and JavaFX in a realistic, portfolio-quality
-application. See [`Report.md`](Report.md) for the full architecture, ERD, class
-design, and AI-usage disclosure.
+**How, in one line.** Each client keeps one socket open; the server assigns every
+connection a thread from a pool, routes each JSON request through a dispatcher to
+the right handler, persists via DAOs, and pushes live updates back to the
+relevant online clients.
 
-## Features
-
-**Mandatory features (all implemented):**
-
-- **Accounts & auth** — registration (unique username/email), login/logout,
-  in-memory session tokens, **BCrypt** password hashing, server-side validation.
-- **Profiles** — display name, bio, avatar & banner images, profile viewing and
-  editing, and follower/following/tweet **statistics**.
-- **Tweets** — create, view, delete (with its reply thread), timestamps, tweet
-  detail pages, and per-user tweet history.
-- **Interactions** — replies with **threaded conversations**, and
-  **retweets/reposts**.
-- **Hashtags** — automatic detection on post, plus hashtag search.
-- **Media** — attach up to 4 images per tweet, thumbnails in the timeline, and
-  full-size viewing on click.
-- **Social graph** — follow / unfollow, followers & following lists, and counts.
-- **Likes** — like / unlike with live like counts.
-- **Feed** — a chronological **personalized timeline** (your tweets + people you
-  follow) with **real-time delivery** of new tweets, plus a global "Explore"
-  feed.
-- **Search** — by username/display name, by tweet text, and by hashtag; open
-  profiles directly from results.
-
-**Bonus features implemented:**
-
-- 🔔 **Real-time notifications** (follow / like / reply / retweet) with a live
-  nav badge, pushed over the socket.
-- ♻️ Real-time **like** and **follow** propagation to other clients.
-- 🌙 **Dark mode** toggle (full theme, light & dark).
-- ✍️ **Character-limit enforcement** (280) with a live counter, validated on both
-  client and server.
-- 🖼️ **Image attachments**, thumbnails, and **full-size image viewing**.
-- 🔁 **Retweets** with a "retweeted by" attribution in the feed.
-- 🔥 **Trending hashtags** and **suggested users** queries.
-- 📱 **Responsive UI** that adapts to window size.
-
-## Architecture at a glance
-
-```
-┌──────────────┐   JSON packets over TCP sockets   ┌──────────────────────────┐
-│ JavaFX Client│  ───────────────────────────────► │  Server (thread pool)    │
-│ (per user)   │  ◄─────── real-time pushes ─────── │  ClientHandler           │
-│              │                                    │   → Dispatcher (+auth)   │
-│ NetworkService│                                   │     → Handlers (logic)   │
-│ (bg listener)│                                    │       → DAOs (JDBC)      │
-└──────────────┘                                    └───────────┬──────────────┘
-                                                                │ HikariCP pool
-                                                          ┌─────▼──────┐
-                                                          │ PostgreSQL │
-                                                          └────────────┘
-```
-
-Each connected client gets its own thread from a fixed pool. A
-`ConnectionRegistry` maps online users to their socket so the server can push
-`NEW_TWEET_PUSH`, `LIKE_PUSH`, `FOLLOW_PUSH`, and `NOTIFICATION_PUSH` messages in
-real time. Full details in [`Report.md`](Report.md).
-
-## Tech stack
-
-| Layer | Technology |
-|-------|------------|
-| Language | Java 17+ (built/tested on Java 21) |
-| UI | JavaFX 21 (FXML + programmatic, CSS theming) |
-| Networking | Java `Socket` / `ServerSocket`, fixed thread pool |
-| Protocol | JSON over a line-delimited socket stream (Gson 2.10) |
-| Database | PostgreSQL 16 via JDBC |
-| Connection pool | HikariCP |
-| Password hashing | jBCrypt |
-| Build | Maven (multi-module) |
-
-## Project structure
+The codebase is split into three Maven modules so the wire contract can never
+drift between the two sides:
 
 ```
 twitter-clone/
-├── shared/   models + JSON protocol contract (Packet, PacketType, User, Tweet,
-│             Notification, HashtagParser) — shared by client and server
+├── shared/   models + JSON protocol (Packet, PacketType, User, Tweet, …)
 ├── server/   sockets, thread pool, dispatcher, handlers, DAOs, schema.sql
-├── client/   JavaFX client: network layer, controllers, programmatic UI, CSS
-├── README.md
-└── Report.md
+└── client/   JavaFX app: network layer, controllers, UI components, CSS, icons
 ```
 
-## Getting started
+## Features
+
+**Core**
+
+- **Accounts** — registration with unique username/email, login/logout, session
+  tokens, **BCrypt**-hashed passwords, server-side validation.
+- **Profiles** — display name, bio, avatar & banner images, editing, and
+  follower / following / tweet **stats**.
+- **Tweets** — create, view, delete (with the whole reply thread), timestamps,
+  per-user history, and a full detail page.
+- **Interactions** — **threaded replies** and **retweets / reposts**.
+- **Social graph** — follow / unfollow with follower & following lists.
+- **Likes** — like / unlike with live counts.
+- **Feed** — a chronological **personalized timeline** (you + who you follow)
+  with **real-time tweet delivery**, plus a global *Explore* feed.
+- **Hashtags** — auto-detected from text, clickable, and searchable. Tags are
+  matched case-insensitively but displayed using their most common casing.
+- **Media** — attach up to 4 images per tweet, thumbnails in the timeline, and
+  full-size viewing.
+- **Search** — people (username / display name), tweet text, and hashtags.
+
+**Bonus**
+
+-  **Real-time notifications** (follow / like / reply / retweet) with a live
+  unread badge.
+-  Real-time **like** and **follow** propagation across clients.
+-  **Dark mode** — a full light/dark theme toggle.
+-  **280-character limit** with a live counter, enforced on client *and* server.
+-  **Trending hashtags** and suggested users.
+-  Crisp, theme-aware **Lucide vector icons** throughout the UI.
+-  **Responsive** layout that adapts to window size.
+
+## How it works
+
+```
+┌───────────────┐   JSON packets over TCP    ┌──────────────────────────────┐
+│ JavaFX Client │ ─────── request ─────────► │ Server (fixed thread pool)   │
+│  (one/user)   │ ◄────── response ────────  │  ClientHandler → Dispatcher   │
+│ NetworkService│ ◄─── real-time push ─────  │   → Handler → DAO (JDBC)      │
+└───────────────┘                            └──────────────┬───────────────┘
+                                                            │ HikariCP pool
+                                                     ┌──────▼──────┐
+                                                     │ PostgreSQL  │
+                                                     └─────────────┘
+```
+
+Every message is one line of JSON (a `Packet`) carrying a `type`, an optional
+session `token`, a `requestId` for matching responses, and a `payload`. A
+`ConnectionRegistry` maps online users to their sockets so the server can deliver
+`NEW_TWEET_PUSH`, `LIKE_PUSH`, `FOLLOW_PUSH`, and `NOTIFICATION_PUSH` without the
+client polling. See [`Report.md`](Report.md) for the full architecture, ERD, and
+design decisions.
+
+## Usage
 
 ### Prerequisites
 
-- **JDK 17+** (Java 21 recommended)
+- **JDK 17+** (developed and tested on Java 21)
 - **Maven 3.8+**
 - **PostgreSQL 14+** running locally
 
-### Database setup
+### 1. Set up the database
 
-Create a database and a role (the defaults the server expects):
+Create the database and the role the server expects by default:
 
 ```bash
 createdb twitter_clone
 psql -d twitter_clone -c "CREATE ROLE phipsitheta LOGIN PASSWORD 'phipsitheta' SUPERUSER;"
 ```
 
-You **do not** need to run the schema manually — the server applies
-[`server/src/main/resources/schema.sql`](server/src/main/resources/schema.sql)
-automatically on startup (it is idempotent). To run it by hand anyway:
+You don't need to run any SQL by hand — on startup the server applies the bundled
+[`schema.sql`](server/src/main/resources/schema.sql), which is idempotent (safe
+to run every boot).
 
-```bash
-psql -U phipsitheta -d twitter_clone -f server/src/main/resources/schema.sql
-```
-
-### Build
+### 2. Build
 
 ```bash
 mvn clean install
 ```
 
-### Run the server
+### 3. Run the server
 
 ```bash
-# uses the defaults below unless overridden by environment variables
 java -jar server/target/server-1.0-SNAPSHOT.jar
 ```
 
-The server listens on **port 8080** and prints `Server is listening ...` once
-ready.
+It listens on **port 8080** and prints `Server is listening ...` once ready.
 
-### Run the client
-
-Launch one or more clients (open several to see real-time updates between users):
+### 4. Run the client(s)
 
 ```bash
 mvn -pl client javafx:run
 ```
 
-## Usage guide
+Open **two** windows and log in as different users to watch real-time delivery in
+action:
 
-1. **Register** a new account (unique username, valid email, 6+ char password),
-   or **log in**.
-2. **Compose a tweet** from the Home page — type up to 280 characters, add
-   `#hashtags`, and optionally attach images. Watch the character counter.
-3. **Interact** — click ♥ to like, ↻ to retweet, 💬 to reply. Click a tweet to
-   open its **detail + thread**.
-4. **Follow people** — open a profile (click any avatar/name or use Search) and
-   press **Follow**. Their tweets now appear in your **Following** feed in real
-   time.
-5. **Edit your profile** — go to Profile → *Edit profile* to set a display name,
-   bio, avatar, and banner.
-6. **Search** — find people, tweets, or `#hashtags`; the Search page also shows
-   **trending hashtags**.
-7. **Notifications** — the 🔔 nav item shows a live unread badge for new
-   follows, likes, replies, and retweets.
-8. **Dark mode** — toggle from the left navigation at any time.
+1. Register two accounts (unique username, valid email, 6+ char password).
+2. From window A, open window B's profile and press **Follow**.
+3. In window B, post a tweet with an image and a `#hashtag`.
+4. It appears in window A's feed instantly, and A's 🔔 badge lights up when B
+   likes or replies to A's tweets.
+5. Toggle **Dark mode** from the left navigation any time.
 
-> **Tip:** log in as two different users in two client windows and like/follow
-> from one — the other updates instantly.
+### Configuration
 
-## Demo / Visuals
-
-> _Add screenshots or a short GIF here for your submission._ Suggested captures:
->
-> - Login / registration screen (light **and** dark mode)
-> - Home feed with a tweet containing an image and hashtags
-> - A profile page with banner, avatar, bio, and stats
-> - Two windows side-by-side showing a real-time like/follow update
-> - The notifications page with the unread badge
-
-Place images under a `docs/` folder and reference them, e.g.
-`![Home feed](docs/home.png)`.
-
-## Configuration
-
-The server reads database settings from environment variables (with sensible
-local defaults):
+The server reads database settings from environment variables (defaults shown):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
@@ -220,29 +170,54 @@ local defaults):
 | `DB_USER` | `phipsitheta` | database user |
 | `DB_PASSWORD` | *(empty)* | database password |
 
-The client connects to `localhost:8080` (see `ClientMain`). Change the host/port
-constants there to connect to a remote server.
+Example — point the server at a different database:
+
+```bash
+DB_URL="jdbc:postgresql://localhost:5432/mydb" DB_USER="me" DB_PASSWORD="secret" \
+  java -jar server/target/server-1.0-SNAPSHOT.jar
+```
+
+The client connects to `localhost:8080`; change the constants in `ClientMain` to
+reach a remote server.
+
+## Demo / Visuals
+
+> _Add screenshots or a short GIF here for the submission._ Suggested captures
+> (place them under a `docs/` folder and link them, e.g. `![Home](docs/home.png)`):
+>
+> - Login screen in **light** and **dark** mode
+> - Home feed showing a tweet with an image and highlighted hashtags
+> - A profile page (banner, avatar, bio, stats, Follow button)
+> - Two windows side-by-side demonstrating a real-time like / new tweet
+> - The notifications page with the unread badge
 
 ## Credits
 
 - **Course:** Advanced Programming, Summer 2026 — Dr. Saeed Reza Kheradpisheh
-- **Team roles:** Frontend (JavaFX), Backend (sockets/logic), Database (schema/JDBC)
-- **Libraries:** [Gson](https://github.com/google/gson),
-  [HikariCP](https://github.com/brettwooldridge/HikariCP),
-  [jBCrypt](https://www.mindrot.org/projects/jBCrypt/),
-  [PostgreSQL JDBC](https://jdbc.postgresql.org/),
-  [OpenJFX](https://openjfx.io/)
-- AI assistance is disclosed in [`Report.md`](Report.md#ai-usage-disclosure).
+- **Team:** Frontend (JavaFX), Backend (sockets & logic), Database (schema & JDBC)
+- **Libraries & resources:**
+  [Gson](https://github.com/google/gson) ·
+  [HikariCP](https://github.com/brettwooldridge/HikariCP) ·
+  [jBCrypt](https://www.mindrot.org/projects/jBCrypt/) ·
+  [PostgreSQL JDBC](https://jdbc.postgresql.org/) ·
+  [OpenJFX](https://openjfx.io/) ·
+  [Lucide icons](https://lucide.dev) (ISC License)
+- AI assistance is disclosed in [`Report.md`](Report.md#7-ai-usage-disclosure).
 
 ## Changelog
 
-- **v1.0** — Full release. Auth, profiles (avatar/banner/bio/stats), tweets,
-  replies/threads, retweets, likes, follows, hashtags, image media, search,
-  trending, notifications, real-time push, dark mode, character limit, runnable
-  server jar, auto-initialized schema.
-- **v0.1** — Initial scaffold (modules, protocol contract, stubbed classes).
+**v1.0** — First complete release.
+
+- Auth, sessions, and profiles (avatar, banner, bio, stats).
+- Tweets, threaded replies, retweets, likes, follows, and the personalized feed.
+- Real-time delivery of tweets, likes, follows, and notifications.
+- Hashtags (case-insensitive, canonical-cased display), image media, and search.
+- Trending hashtags, dark mode, 280-character limit, and Lucide vector icons.
+- Runnable server jar and an auto-initialized, idempotent schema.
+
+**v0.1** — Initial scaffold: modules, JSON protocol contract, and stubbed classes.
 
 ## Contact
 
-For questions about this project, contact the team through the course channel or
-the repository's issue tracker.
+Questions or issues? Reach the team via the course communication channel or open
+an issue on the project's repository.
