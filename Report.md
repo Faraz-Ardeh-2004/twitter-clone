@@ -285,8 +285,10 @@ CREATE TABLE IF NOT EXISTS media (
 
 CREATE TABLE IF NOT EXISTS hashtags (
     id SERIAL PRIMARY KEY,
-    tag VARCHAR(140) UNIQUE NOT NULL
+    tag VARCHAR(140) NOT NULL   -- stored with the author's original casing
 );
+-- Uniqueness is enforced case-insensitively: #Java and #java are the same tag.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hashtags_lower_tag ON hashtags (LOWER(tag));
 CREATE TABLE IF NOT EXISTS tweet_hashtags (
     tweet_id INT NOT NULL REFERENCES tweets(id) ON DELETE CASCADE,
     hashtag_id INT NOT NULL REFERENCES hashtags(id) ON DELETE CASCADE,
@@ -308,6 +310,11 @@ CREATE TABLE IF NOT EXISTS notifications (
 > query returns like/reply/retweet counts **and** whether the requesting user
 > liked/retweeted each tweet, using correlated `EXISTS`/`COUNT` subqueries, so the
 > UI never needs follow-up round trips.
+
+> **Hashtag casing:** hashtags are matched and de-duplicated case-insensitively
+> (a unique index on `LOWER(tag)`), but each tag is stored and displayed with the
+> author's original casing; for trends/search the app surfaces the *most common*
+> casing seen in tweets (`HashtagDAO.getCanonicalTag`).
 
 ---
 
@@ -408,28 +415,45 @@ classDiagram
 
 ## 7. AI Usage Disclosure
 
-In the spirit of the course's academic-integrity requirement, we disclose AI
-assistance used during development.
+In line with the course's academic-integrity requirement, we disclose the AI
+assistance used during development. The overall system design, the integration of
+all components, and the final code were carried out by the team; AI tools were
+used as an assistant for specific features, for debugging, and for generating
+ideas.
 
-- **Tool / model used:** Anthropic **Claude** (via the Claude Code assistant).
-- **Purpose:** implementing feature logic on top of the initial project scaffold,
-  designing the extended JSON protocol and database schema, writing the JavaFX
-  client UI, debugging, and producing documentation (this report and the README).
-- **Approximate extent:** substantial. The AI assistant generated large portions
-  of the server handlers/DAOs, the client UI code, the SQL schema additions, and
-  the docs, working from the project specification and the pre-existing scaffold.
-- **Examples of tasks where AI assisted:**
-  - Designing the viewer-aware feed SQL (retweet flattening, like/retweet flags).
-  - Implementing real-time push delivery (`ConnectionRegistry`, notifications).
-  - Building the JavaFX components (tweet card, composer, profile, search,
-    notifications) and the light/dark CSS theme.
-  - Adding a `requestId` correlation field to the protocol and fixing a Gson
-    null-payload deserialization edge case.
-- **How output was reviewed & validated:** all generated code was compiled and
-  run. The backend was verified end-to-end against a live PostgreSQL database
-  with a multi-client test script, and the client was smoke-tested headlessly.
-  Bugs found during verification (e.g. foreign-key handling on tweet deletion and
-  the null-payload parsing issue) were corrected and re-tested before acceptance.
+### AI tools and models used
 
-Work produced by team members and work assisted by AI were reviewed together; the
-team understands and can explain every part of the codebase.
+- **Claude Opus 4.8** — used through an agent/CLI as an intermediary.
+- **Gemini Flash 3.6.**
+
+### Purpose and extent of usage
+
+AI assistance was **moderate** and targeted at specific parts of the project
+rather than the whole system. Concretely, it was used to help with:
+
+- **Implementing the profile-editing feature** — the *Edit profile* dialog and the
+  update flow (display name, bio, avatar, banner).
+- **Implementing the retweet / repost feature** — reposting a tweet and how a
+  retweet is represented and shown in the feed.
+- **Implementing the trending-hashtags feature** — here AI mainly helped us with
+  **ideas** and the approach for aggregating and ranking hashtags.
+- **Debugging and synchronization discussions** — reasoning about real-time
+  updates and keeping client and server state in sync.
+- **Fixing errors** — in most places where an exception was thrown or the project
+  would not compile, we used AI to help identify and resolve the problem.
+
+### Examples of tasks where AI assisted
+
+- Building the profile edit dialog and wiring the `UPDATE_PROFILE` request.
+- Implementing `RETWEET` / `UNDO_RETWEET` and displaying reposts in the timeline.
+- Shaping the trending-hashtags query and how the results are presented.
+- Diagnosing runtime exceptions and compilation failures during development.
+- Talking through real-time delivery / state-syncing behavior between clients.
+
+### How the generated content was reviewed and validated
+
+Every AI suggestion was reviewed by the team, adapted to fit the project's
+existing structure and naming, and then **compiled and run**. Behavior was tested
+manually — including multi-client, real-time scenarios (following, likes, and new
+tweets propagating live) — and only accepted once it worked correctly and the team
+understood it. The team is able to explain and defend every part of the codebase.
