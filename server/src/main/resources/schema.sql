@@ -107,9 +107,9 @@ CREATE INDEX IF NOT EXISTS idx_media_tweet ON media (tweet_id);
 
 -- ---------- Hashtags ----------
 CREATE TABLE IF NOT EXISTS hashtags (
-                                        id  SERIAL PRIMARY KEY,
-                                        tag VARCHAR(140) NOT NULL  -- stored lower-cased, without the leading '#'
-    );
+    id  SERIAL PRIMARY KEY,
+    tag VARCHAR(140) NOT NULL  -- stored lower-cased, without the leading '#'
+);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_hashtags_lower_tag ON hashtags (LOWER(tag));
 CREATE TABLE IF NOT EXISTS tweet_hashtags (
                                               tweet_id   INT NOT NULL REFERENCES tweets(id)   ON DELETE CASCADE,
