@@ -14,6 +14,7 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Priority;
@@ -65,35 +66,42 @@ public class AppShell implements Navigator {
         nav.setPadding(new Insets(16, 12, 16, 12));
         nav.setPrefWidth(230);
 
-        Label logo = new Label("🐦 Twitter Clone");
+        Label logo = new Label("Twitter Clone");
         logo.getStyleClass().add("title");
+        logo.setGraphic(Icons.create("bird", 24, "icon-accent"));
+        logo.setGraphicTextGap(8);
         logo.setPadding(new Insets(0, 0, 12, 8));
 
-        Button homeBtn = navButton("🏠  Home", this::openHome);
-        Button searchBtn = navButton("🔍  Search", () -> openSearch(""));
-        notificationsButton = navButton("🔔  Notifications", this::openNotifications);
-        Button profileBtn = navButton("👤  Profile",
+        Button homeBtn = navButton("Home", "house", this::openHome);
+        Button searchBtn = navButton("Search", "search", () -> openSearch(""));
+        notificationsButton = navButton("Notifications", "bell", this::openNotifications);
+        Button profileBtn = navButton("Profile", "user",
                 () -> openProfile(UserContext.getInstance().getUserId()));
 
         Button tweetBtn = new Button("Tweet");
         tweetBtn.getStyleClass().add("btn-primary");
+        tweetBtn.setGraphic(Icons.create("send", 16, "icon-white"));
+        tweetBtn.setGraphicTextGap(8);
         tweetBtn.setMaxWidth(Double.MAX_VALUE);
         tweetBtn.setOnAction(e -> openHome());
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
 
-        darkModeButton = navButton(darkLabel(), this::toggleDark);
-        Button logoutBtn = navButton("↩  Logout", this::logout);
+        darkModeButton = navButton(darkText(), darkIcon(), this::toggleDark);
+        Button logoutBtn = navButton("Logout", "log-out", this::logout);
 
         nav.getChildren().addAll(logo, homeBtn, searchBtn, notificationsButton, profileBtn,
                 tweetBtn, spacer, darkModeButton, logoutBtn);
         return nav;
     }
 
-    private Button navButton(String text, Runnable action) {
+    private Button navButton(String text, String iconName, Runnable action) {
         Button b = new Button(text);
         b.getStyleClass().add("nav-button");
+        b.setGraphic(Icons.create(iconName, 20, "icon-default"));
+        b.setGraphicTextGap(14);
+        b.setContentDisplay(ContentDisplay.LEFT);
         b.setMaxWidth(Double.MAX_VALUE);
         b.setAlignment(Pos.CENTER_LEFT);
         b.setOnAction(e -> action.run());
@@ -181,7 +189,7 @@ public class AppShell implements Navigator {
     }
 
     private void refreshNotificationsLabel() {
-        notificationsButton.setText(unread > 0 ? "🔔  Notifications (" + unread + ")" : "🔔  Notifications");
+        notificationsButton.setText(unread > 0 ? "Notifications (" + unread + ")" : "Notifications");
     }
 
     // ---- dark mode & logout ----
@@ -189,11 +197,16 @@ public class AppShell implements Navigator {
     private void toggleDark() {
         UserContext.getInstance().toggleDarkMode();
         Theme.refresh(stage.getScene());
-        darkModeButton.setText(darkLabel());
+        darkModeButton.setText(darkText());
+        darkModeButton.setGraphic(Icons.create(darkIcon(), 20, "icon-default"));
     }
 
-    private String darkLabel() {
-        return UserContext.getInstance().isDarkMode() ? "☀  Light mode" : "🌙  Dark mode";
+    private String darkText() {
+        return UserContext.getInstance().isDarkMode() ? "Light mode" : "Dark mode";
+    }
+
+    private String darkIcon() {
+        return UserContext.getInstance().isDarkMode() ? "sun" : "moon";
     }
 
     private void logout() {

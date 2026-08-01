@@ -11,6 +11,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -66,9 +67,13 @@ public class TweetCard extends VBox {
 
         // Retweet context banner
         if (tweet.getRetweetOf() != null && tweet.getRetweetedBy() != null) {
-            Label ctx = new Label("↻ @" + tweet.getRetweetedBy() + " retweeted");
+            Label ctx = new Label("@" + tweet.getRetweetedBy() + " retweeted");
             ctx.getStyleClass().add("tweet-context");
-            getChildren().add(ctx);
+            ctx.setGraphic(Icons.create("repeat", 13, "icon-muted"));
+            ctx.setGraphicTextGap(6);
+            HBox ctxRow = new HBox(ctx);
+            ctxRow.setPadding(new Insets(0, 0, 0, 54));
+            getChildren().add(ctxRow);
         }
 
         HBox row = new HBox(10);
@@ -158,28 +163,30 @@ public class TweetCard extends VBox {
 
     private Node buildActions() {
         HBox actions = new HBox(24);
-        actions.setPadding(new Insets(6, 0, 0, 0));
+        actions.setPadding(new Insets(6, 0, 0, 54));
         actions.setAlignment(Pos.CENTER_LEFT);
 
-        Button reply = action("💬 " + tweet.getReplyCount(), false);
+        Button reply = action("message-circle", "icon-muted", String.valueOf(tweet.getReplyCount()));
         reply.setOnAction(e -> navigator.openTweetDetail(tweet));
 
-        retweetButton = action("↻ " + tweet.getRetweetCount(), tweet.isRetweeted());
-        if (tweet.isRetweeted()) {
-            retweetButton.getStyleClass().add("retweeted");
-        }
+        retweetButton = new Button();
+        retweetButton.getStyleClass().add("action-button");
+        retweetButton.setContentDisplay(ContentDisplay.LEFT);
+        retweetButton.setGraphicTextGap(6);
+        refreshRetweetButton();
         retweetButton.setOnAction(e -> toggleRetweet());
 
-        likeButton = action("♥ " + tweet.getLikeCount(), tweet.isLiked());
-        if (tweet.isLiked()) {
-            likeButton.getStyleClass().add("liked");
-        }
+        likeButton = new Button();
+        likeButton.getStyleClass().add("action-button");
+        likeButton.setContentDisplay(ContentDisplay.LEFT);
+        likeButton.setGraphicTextGap(6);
+        refreshLikeButton();
         likeButton.setOnAction(e -> toggleLike());
 
         actions.getChildren().addAll(reply, retweetButton, likeButton);
 
         if (tweet.getAuthorId() == UserContext.getInstance().getUserId() && tweet.getRetweetOf() == null) {
-            Button delete = action("🗑 Delete", false);
+            Button delete = action("trash", "icon-muted", "");
             delete.setOnAction(e -> deleteTweet());
             actions.getChildren().add(delete);
         }
@@ -190,9 +197,12 @@ public class TweetCard extends VBox {
         return actions;
     }
 
-    private Button action(String text, boolean active) {
+    private Button action(String iconName, String colorClass, String text) {
         Button b = new Button(text);
         b.getStyleClass().add("action-button");
+        b.setGraphic(Icons.create(iconName, 18, colorClass));
+        b.setContentDisplay(ContentDisplay.LEFT);
+        b.setGraphicTextGap(6);
         return b;
     }
 
@@ -265,7 +275,8 @@ public class TweetCard extends VBox {
     }
 
     private void refreshLikeButton() {
-        likeButton.setText("♥ " + tweet.getLikeCount());
+        likeButton.setText(String.valueOf(tweet.getLikeCount()));
+        likeButton.setGraphic(Icons.create("heart", 18, tweet.isLiked() ? "icon-like" : "icon-muted"));
         likeButton.getStyleClass().remove("liked");
         if (tweet.isLiked()) {
             likeButton.getStyleClass().add("liked");
@@ -273,7 +284,8 @@ public class TweetCard extends VBox {
     }
 
     private void refreshRetweetButton() {
-        retweetButton.setText("↻ " + tweet.getRetweetCount());
+        retweetButton.setText(String.valueOf(tweet.getRetweetCount()));
+        retweetButton.setGraphic(Icons.create("repeat", 18, tweet.isRetweeted() ? "icon-retweet" : "icon-muted"));
         retweetButton.getStyleClass().remove("retweeted");
         if (tweet.isRetweeted()) {
             retweetButton.getStyleClass().add("retweeted");

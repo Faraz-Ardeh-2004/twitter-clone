@@ -14,7 +14,7 @@
            fx:controller="com.twitterclone.client.controller.LoginController">
     <VBox alignment="CENTER" spacing="14.0" maxWidth="340" styleClass="auth-card">
 
-        <Label text="🐦 Twitter Clone" styleClass="title"/>
+        <Label fx:id="brandLabel" text="Twitter Clone" styleClass="title"/>
         <Label text="Log in to your account" styleClass="text-muted"/>
 
         <TextField fx:id="usernameField" promptText="Username"/>

@@ -43,6 +43,15 @@ public class LoginController {
     private Button goToRegisterButton;
 
     @FXML
+    private Label brandLabel;
+
+    @FXML
+    public void initialize() {
+        brandLabel.setGraphic(com.twitterclone.client.ui.Icons.create("bird", 26, "icon-accent"));
+        brandLabel.setGraphicTextGap(8);
+    }
+
+    @FXML
     private void onLoginButtonClick() {
         String username = usernameField.getText();
         String password = passwordField.getText();

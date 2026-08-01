@@ -1,0 +1,332 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+
+\definecolor{accent}{HTML}{1D9BF0}
+\definecolor{answergreen}{HTML}{00785A}
+
+\hypersetup{colorlinks=true, linkcolor=accent, urlcolor=accent}
+
+\titleformat{\section}{\large\bfseries\color{accent}}{\thesection.}{0.6em}{}
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small Twitter Clone --- Answer Key}
+\lhead{\small Advanced Programming, Summer 2026}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\newcounter{q}
+% \qa{question}{answer}
+\newcommand{\qa}[2]{%
+  \refstepcounter{q}%
+  \medskip\par\noindent\textbf{Q\theq.}\ \ #1\par
+  \smallskip\noindent\textcolor{answergreen}{\textbf{Model answer.}}\ #2\par
+}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries Twitter Clone --- Answer Key}\\[4pt]
+  {\large Model answers to the code-defense questions}\\[2pt]
+  {\color{gray}Advanced Programming --- Dr.\ Saeed Reza Kheradpisheh}
+\end{center}
+
+\vspace{4pt}
+\noindent
+These are reference answers for the 30 questions. They describe the intended
+reasoning; a student's phrasing may differ, but a strong answer should hit the
+same key points (the \emph{why}, not just the mechanics).
+
+%======================================================================
+\section{Architecture \& Networking}
+
+\qa{Why a bounded thread pool instead of a thread-per-client, and what happens
+when it is exhausted?}{%
+A fixed pool caps the number of live OS threads (20), bounding memory (each
+thread has its own stack) and context-switching overhead, and it prevents an
+unbounded number of connections from exhausting the machine. \code{newFixedThreadPool}
+is backed by an unbounded task queue, so when all 20 threads are busy a newly
+accepted connection's task simply \emph{waits in the queue} until a thread frees
+up. Thread-per-client would spawn an unlimited number of threads and can crash the
+JVM under load; the trade-off is that a slow/blocked client holds a pooled thread,
+so the pool size must be chosen sensibly.}
+
+\qa{What does the line-delimited protocol assume, and how is the newline hazard
+avoided?}{%
+It assumes every message is exactly one physical line with no embedded newline,
+because both sides frame messages with \code{readLine()}. If a raw \code{0x0A}
+appeared inside a tweet, \code{readLine()} would split one message into two, and
+the second half would fail to parse and desynchronize the stream. This is avoided
+because Gson's default (non-pretty) output is single-line and escapes any newline
+inside a string value as the two characters \code{\textbackslash n}, so a literal
+newline byte never occurs inside the JSON.}
+
+\qa{What problem does the \code{requestId} solve versus matching by packet
+type?}{%
+It correlates each response to the exact request that produced it. Matching by
+\code{type} breaks when two requests of the same type are in flight (e.g.\ two
+searches or two profile fetches): the first response would trigger whichever
+callback is registered for that type, producing a mismatch. A unique per-request
+UUID (echoed by the server) removes that ambiguity, and pushes---which carry no
+\code{requestId}---are routed through a separate path.}
+
+\qa{Why is \code{Dispatcher.dispatch} wrapped in \code{try/catch (RuntimeException)}
+inside \code{ClientHandler}?}{%
+Handlers and DAOs can throw unchecked exceptions (NPE, \code{IllegalArgument}, a
+Gson parse error on a malformed field, etc.). Without the catch, the exception
+would propagate out of \code{handleLine} into the read loop, ending the loop and
+running the \code{finally} block that closes the socket---so a single bad request
+would disconnect the client. The catch turns it into a graceful \code{ERROR}
+response and keeps the connection alive.}
+
+\qa{Trace a tweet from user A to user B's feed. Who receives the push?}{%
+A sends \code{CREATE\_TWEET}; the Dispatcher validates the token and calls
+\code{TweetHandler.handleCreateTweet}, which inserts the tweet, media and hashtags
+in one transaction, then builds a \code{NEW\_TWEET\_PUSH} carrying the serialized
+tweet and calls \code{ConnectionRegistry.broadcastToFollowers(authorId, packet)}.
+That method sends the push to the author \emph{and} to each of A's followers who is
+currently online (present in the \code{ONLINE\_USERS} map), obtained from
+\code{FollowDAO.getFollowerIds}. B, if online and following A, receives it; the
+client routes the push to \code{HomePage}'s listener, which prepends the card. Only
+the author plus online followers receive it---not everyone---and replies are not
+broadcast (they notify the parent author instead).}
+
+\qa{How does the client tell a response from a push?}{%
+\code{NetworkService.listenLoop} inspects \code{getRequestId()}. If it is non-null
+and a callback is registered under it, the message is a response and that callback
+runs. Otherwise it is an unsolicited push and is dispatched to the listeners
+registered for \code{packet.getType()}. Requests set a UUID that the server echoes,
+while \code{Packet.push(...)} leaves \code{requestId} null---so its presence or
+absence cleanly separates the two.}
+
+%======================================================================
+\section{Concurrency \& Thread Safety}
+
+\qa{Why \code{ConcurrentHashMap} in \code{Authenticator} and
+\code{ConnectionRegistry}?}{%
+Both maps are static and shared by every client thread, which read/write them
+concurrently during login, logout, and broadcast. A plain \code{HashMap} under
+concurrent writes can corrupt its internal buckets during resize (historically an
+infinite loop), lose updates, or throw \code{ConcurrentModificationException} while
+\code{broadcast} iterates it. \code{ConcurrentHashMap} provides thread-safe,
+lock-striped access and safe iteration.}
+
+\qa{Why is \code{sendPacket} \code{synchronized}, and what race does it prevent?}{%
+Two threads can write to the same client's socket: the client's own handler thread
+writing a response, and another user's thread pushing a message (e.g.\ a
+\code{LIKE\_PUSH}) to this client via \code{ConnectionRegistry}. Without
+synchronization, the two \code{println} calls could interleave and merge two JSON
+objects onto one line, so the receiver's \code{readLine()} would get malformed
+JSON. \code{synchronized} makes each packet an atomic, whole-line write.}
+
+\qa{Why does the client listener use \code{Platform.runLater}?}{%
+JavaFX allows the scene graph to be modified only on the JavaFX Application Thread.
+The listener runs on a separate network thread, so it marshals every callback back
+onto the FX thread with \code{Platform.runLater}. Touching the UI from the listener
+thread would throw \code{IllegalStateException: Not on FX application thread}.}
+
+\qa{Why a HikariCP pool instead of a fresh connection per DAO call, and does
+\code{close()} really close the socket?}{%
+Opening a JDBC connection (TCP handshake, authentication, session setup) costs tens
+of milliseconds; a pool keeps a small set of live connections and hands them out,
+giving low latency and bounding the total number of DB connections under
+concurrency. With try-with-resources, calling \code{close()} on a pooled (proxied)
+connection does \emph{not} close the physical socket to Postgres---it returns the
+connection to the pool for reuse---so each DAO method can safely ``close'' without
+tearing anything down.}
+
+%======================================================================
+\section{Database, DAO \& SQL}
+
+\qa{Show how parameterization prevents injection in the \code{ILIKE} search.}{%
+The query is \code{WHERE username ILIKE ?} with \code{stmt.setString(1, "\%"+query+"\%")}.
+The \code{?} placeholder is transmitted to Postgres separately from the SQL text and
+is bound as data, never spliced into the statement string. So input such as
+\code{'; DROP TABLE users; --} is matched literally as a string and can never change
+the query's structure. String concatenation into the SQL would allow exactly that
+break-out.}
+
+\qa{Why must the three inserts in \code{createTweet} be one transaction?}{%
+The tweet row, its media rows, and its hashtag links form one logical ``post'' and
+must all succeed or all fail. Without a transaction, a failure after the tweet was
+already committed would leave an inconsistent state---a tweet with missing images or
+hashtags, or partially linked tags. \code{setAutoCommit(false)} + \code{commit}
+makes it atomic, and \code{rollback} on \code{SQLException} undoes any partial work.}
+
+\qa{Explain \code{r}, \code{d}, and why \code{COALESCE} flattens retweets
+correctly.}{%
+\code{r} is the feed row being scanned (a normal tweet or a repost); \code{d} is the
+tweet to display. \code{COALESCE(r.retweet\_of, r.id)} returns \code{retweet\_of}
+(the original's id) when \code{r} is a repost, and falls back to \code{r.id} when it
+is a normal tweet (\code{retweet\_of} is NULL). Joining \code{tweets d} on that value
+yields the original for a repost and the tweet itself otherwise, while \code{r} still
+supplies who reposted and the ordering timestamp.}
+
+\qa{Why compute \code{liked}/\code{retweeted} on the server in one query?}{%
+Computing them with correlated \code{EXISTS} subqueries parameterized by the viewer
+returns fully-rendered cards in a single round trip. Returning raw tweets and asking
+``did I like tweet X?'' per tweet would be an N+1 of network round trips over the
+socket---slow and chatty---and would scatter the ``truth'' about state across the
+client.}
+
+\qa{What does \code{ON CONFLICT DO NOTHING} give follow/like, and why does it
+matter?}{%
+It makes the write idempotent: repeating an existing follow/like is a harmless no-op
+instead of a primary-key violation. This matters for a double-click or a retry race,
+which would otherwise throw a duplicate-key \code{SQLException}. It also reports zero
+rows affected when the row already existed, which the handler uses to avoid creating
+duplicate notifications.}
+
+\qa{Justify the composite primary key on \code{follows}/\code{likes}.}{%
+The natural identity of a follow or like \emph{is} the pair of ids. A composite PK
+\code{(follower\_id, following\_id)} / \code{(user\_id, tweet\_id)} enforces ``at most
+once'' at the schema level, provides a covering index for lookups, and needs no extra
+column. A surrogate \code{SERIAL id} would still require a separate \code{UNIQUE}
+constraint to prevent duplicates, so it only adds storage and complexity here.}
+
+\qa{Why the recursive CTE for delete, and why is a single \code{DELETE} of parents
+and children safe?}{%
+Replies form a tree through \code{parent\_tweet\_id}, so deleting a tweet must also
+remove its entire descendant subtree (and their likes); \code{WITH RECURSIVE} collects
+all of those ids. Parents and children can be removed in one
+\code{DELETE ... WHERE id = ANY(?)} because the \code{parent\_tweet\_id} foreign key
+uses the default \code{NO ACTION}, whose check is deferred to the \emph{end of the
+statement}---by then every row in the set is gone, so no dangling reference exists.
+(\code{RESTRICT} would check immediately and fail.) Likes are deleted first because
+that table's FK has no cascade.}
+
+\qa{What does ``idempotent additive schema'' mean, and why re-run it every boot?}{%
+Idempotent means running the script any number of times yields the same final state
+and never errors, achieved with \code{IF NOT EXISTS} / \code{ADD COLUMN IF NOT EXISTS}.
+Re-running on each startup is safe because existing objects are skipped and no data is
+dropped, while a brand-new database gets fully created---so nobody has to remember a
+manual migration step.}
+
+\qa{What N+1 problem does \code{getForTweets} with \code{ANY(?)} avoid?}{%
+It loads media/hashtags for \emph{all} tweet ids in one query using
+\code{WHERE tweet\_id = ANY(?)} with a \code{java.sql.Array}, then attaches them from
+an in-memory map. Querying inside the row-mapping loop would issue one query per tweet
+---the N+1 pattern (1 feed query + N child queries)---multiplying DB round trips.
+Batching turns N+1 into 1+2.}
+
+\qa{Where is the BCrypt salt stored, why BCrypt over SHA-256, and why do equal
+passwords hash differently?}{%
+\code{gensalt()} creates a random salt that BCrypt embeds \emph{inside} the resulting
+hash string (the \code{\$2a\$} format), so no separate salt column is needed and
+\code{checkpw} re-reads it. BCrypt is preferable to plain SHA-256 because it is
+deliberately slow with a tunable work factor (resisting brute-force/GPU attacks) and
+is salted by default (defeating rainbow tables). Two users with the same password get
+different hashes because each receives a different random salt.}
+
+%======================================================================
+\section{Protocol \& Serialization}
+
+\qa{What error did the original \code{JsonObject} payload field cause, and how does
+\code{JsonElement} fix it?}{%
+When a message arrived with \code{"payload": null}, Gson tried to bind a
+\code{JsonNull} to a \code{JsonObject}-typed field and threw
+\code{JsonSyntaxException: Expected a JsonObject but was JsonNull}, which
+\code{handleLine} treated as ``Invalid JSON''---silently dropping legitimate
+null-payload messages. Typing the field as \code{JsonElement} lets it hold
+\code{JsonNull} cleanly; the getter converts \code{JsonNull} to \code{null} and
+otherwise returns the \code{JsonObject}, so all existing callers are unaffected.}
+
+\qa{What does \code{transient} do to \code{passwordHash}, and why does it matter?}{%
+Gson skips \code{transient} fields when serializing. So even if a \code{User} object
+still carries its BCrypt hash after a DB read, that hash is never written into the JSON
+sent to a client---it cannot leak. It is defense-in-depth alongside not populating the
+field in client-facing responses.}
+
+\qa{Why the \code{request}/\code{ok}/\code{error}/\code{push} factory methods?}{%
+Each factory encapsulates the correct field combination for one message kind (\code{ok}
+sets \code{status="OK"} and no token; \code{error} sets \code{status="ERROR"} plus a
+message; \code{request} sets type, token, payload). They keep call sites concise and
+prevent malformed packets (such as forgetting to set the status). \code{request} is the
+one that attaches a fresh \code{requestId}.}
+
+\qa{Why enforce the character limit on both client and server?}{%
+The client check (the live counter and disabled button) gives instant feedback and
+avoids a wasted round trip, but the client is untrusted---a modified client or a raw
+socket could send an over-length tweet. The server is the source of truth, so
+\code{handleCreateTweet} re-checks the shared limit (and media count/size) and rejects
+violations. Client validation is UX; server validation is correctness and security.}
+
+%======================================================================
+\section{Object-Oriented Design \& Patterns}
+
+\qa{Name and justify the pattern behind (a) the singletons, (b) the DAOs, (c) the
+Dispatcher, (d) the registry + push listeners.}{%
+(a) \textbf{Singleton}---one shared instance guarding a shared resource or state (the
+DB pool, the single client socket, the session context). (b) \textbf{DAO}---each class
+encapsulates all SQL for one table, isolating persistence from business logic. (c)
+\textbf{Front Controller / Dispatcher (command routing)}---a single entry point that
+routes each request type to its handler and applies cross-cutting authentication. (d)
+\textbf{Observer / publish--subscribe}---\code{ConnectionRegistry} publishes events to
+subscribed online clients, and on the client, listeners subscribe by packet type,
+decoupling event producers from consumers.}
+
+\qa{Advantages of centralizing authentication in the Dispatcher?}{%
+Validating the token once in the Dispatcher means no handler can forget the check (no
+accidental unauthenticated access); the \code{userId} is resolved once and passed in,
+so handlers cannot disagree on identity; the public-vs-protected policy lives in one
+readable place; and there is no duplicated auth code. Per-handler checks would be
+repetitive and easy to get wrong.}
+
+\qa{Which principle does the \code{Binder} functional interface illustrate, and what
+would the code look like without it?}{%
+It illustrates polymorphism / a lightweight Strategy via a lambda: the varying step
+(binding the WHERE/LIMIT parameters at indexes 3+) is abstracted so a single
+\code{query()} method handles viewer-parameter binding, execution, row mapping, and
+media/hashtag attachment for every read. Without it, that same connection/execute/map/
+attach block would be copy-pasted across roughly seven read methods (feed, personalized
+feed, user tweets, by-id, replies, search, hashtag), inviting divergence and bugs.}
+
+%======================================================================
+\section{JavaFX Client}
+
+\qa{Explain the optimistic like and how a later \code{LIKE\_PUSH} is reconciled.}{%
+The card updates the heart and count immediately for a responsive feel, sends
+\code{LIKE\_TWEET}, and reverts if the server returns an error---so correctness is
+preserved. When a \code{LIKE\_PUSH} later arrives (another user liked the same tweet),
+\code{FeedList.applyLikePush} finds the card by tweet id and calls
+\code{applyLikeUpdate(likeCount)}, overwriting the count with the server's authoritative
+value, keeping every client in sync. The push carries only the count, so another user's
+action does not flip \emph{this} viewer's own liked state.}
+
+\qa{Why toggle a \code{dark} style class with CSS variables instead of inline
+styles?}{%
+Toggling one class on the scene root flips the whole tree instantly, because every
+control inherits colors through CSS custom properties (\code{-fx-bg}, \code{-fx-text},
+\ldots) that are redefined under \code{.root.dark}, and all colors live in one
+stylesheet. Inline styles would require imperatively walking every control on each
+toggle (and remembering each one), which is verbose, error-prone, and would not apply to
+nodes created later.}
+
+\qa{Discuss the trade-offs of Base64-in-DB media, and why cap the encoded length?}{%
+Pros: everything lives in one place---images are stored atomically and transactionally
+with the tweet, need no separate file store or static server, and travel trivially
+inside the existing JSON socket protocol. Cons: Base64 inflates size by roughly a third,
+bloating the database and every feed query that returns media, and TEXT blobs are far
+heavier than a short path or URL; storing files on disk / object storage and keeping only
+a URL keeps rows small and lets images stream and cache independently. Because the encoded
+string travels inside a single-line JSON packet and lands in a TEXT column, the code caps
+the encoded length (\code{MAX\_MEDIA\_BASE64\_LENGTH}) to bound packet and row size and
+prevent abuse.}
+
+\vspace{10pt}
+\hrule
+\vspace{6pt}
+\noindent{\small\itshape Grading note: award full credit when the student explains the
+\emph{reason} (safety, concurrency, performance, UX) and can point to the relevant lines,
+even if the wording differs from the above.}
+
+\end{document}

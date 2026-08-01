@@ -40,6 +40,9 @@ public class SearchPage {
         searchField.setText(initialQuery == null ? "" : initialQuery);
         Button go = new Button("Search");
         go.getStyleClass().add("btn-primary");
+        go.setGraphic(Icons.create("search", 16, "icon-white"));
+        go.setGraphicTextGap(6);
+        go.setContentDisplay(javafx.scene.control.ContentDisplay.LEFT);
         go.setOnAction(e -> runSearch());
         searchField.setOnAction(e -> runSearch());
         HBox.setHgrow(searchField, Priority.ALWAYS);
